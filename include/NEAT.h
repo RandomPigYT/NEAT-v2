@@ -6,6 +6,9 @@
 #include <assert.h>
 #include <stdbool.h>
 
+#define NEAT_MAX_CON_GEN_RANGE 1.0f
+#define NEAT_MIN_CON_GEN_RANGE -1.0f
+
 #define TO_STR__(x) #x
 #define TO_STR(x) TO_STR__(x)
 
@@ -18,17 +21,16 @@
 
 #define DA_INIT_CAPACITY 25
 
-#define DA_APPEND(arr, item)                                                \
-  {                                                                         \
-    if ((arr)->count >= (arr)->capacity) {                                  \
-      (arr)->capacity = (arr)->capacity == 0 ? DA_INIT_CAPACITY             \
-                                             : 2 * (arr)->capacity;         \
-      (arr)->items =                                                        \
-        realloc((arr)->items, (arr)->capacity * sizeof(*(arr)->items));     \
-      assert((arr)->items != NULL &&                                        \
-             (__FILE__ ":" TO_STR(__LINE__) " Failed to allocate memory")); \
-    }                                                                       \
-    (arr)->items[(arr)->count++] = (item);                                  \
+#define DA_APPEND(arr, item)                                            \
+  {                                                                     \
+    if ((arr)->count >= (arr)->capacity) {                              \
+      (arr)->capacity = (arr)->capacity == 0 ? DA_INIT_CAPACITY         \
+                                             : 2 * (arr)->capacity;     \
+      (arr)->items =                                                    \
+        realloc((arr)->items, (arr)->capacity * sizeof(*(arr)->items)); \
+      assert((arr)->items != NULL && " Failed to allocate memory");     \
+    }                                                                   \
+    (arr)->items[(arr)->count++] = (item);                              \
   }
 
 enum NEAT_NeuronKind {
@@ -64,8 +66,8 @@ enum NEAT_ConnectionKind {
 };
 
 struct NEAT_Connection {
-  uint64_t to;
-  uint64_t from;
+  uint32_t from;
+  uint32_t to;
 
   float weight;
 
@@ -75,27 +77,47 @@ struct NEAT_Connection {
 };
 
 struct NEAT_Neuron {
-  uint64_t ID;
   enum NEAT_NeuronKind kind;
+  float activation;
+
+  uint32_t id;
 };
 
 struct NEAT_Genome {
   DA_CREATE(struct NEAT_Connection) connections;
   DA_CREATE(struct NEAT_Neuron) neurons;
 
-  uint64_t species;
+  uint32_t species;
+};
+
+struct NEAT_Species {
+  DA_CREATE(struct NEAT_Genome *) genomes;
+
+  float currentFitness;
+
+  float bestFitness;
+  uint32_t gensSinceImproved;
 };
 
 struct NEAT_ConnectionRecord {
-  uint64_t to;
-  uint64_t from;
+  uint32_t to;
+  uint32_t from;
 
-  uint64_t innovation;
+  uint64_t generation;
 };
 
 struct NEAT_Context {
-  uint64_t innovation;
+  // The index of the record determines the innovation
+  // DO NOT CHANGE ITS ORDER!
   DA_CREATE(struct NEAT_ConnectionRecord) history;
+
+  uint32_t populationSize;
+  struct NEAT_Genome *population;
+
+  uint32_t targetSpecies;
+  float speciationThreshold;
+
+  uint32_t currentGeneration;
 };
 
 #ifdef NEAT_H_IMPLEMENTATION
