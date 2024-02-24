@@ -13,6 +13,5 @@ int main(void) {
     NEAT_printNetwork(&ctx.population[i]);
   }
 
-  test(&ctx.population[0]);
   return 0;
 }
