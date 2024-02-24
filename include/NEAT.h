@@ -77,10 +77,13 @@ struct NEAT_Connection {
 };
 
 struct NEAT_Neuron {
+  // id 0 is always the bias neuron
+  uint32_t id;
+
   enum NEAT_NeuronKind kind;
   float activation;
 
-  uint32_t id;
+  uint32_t layer;
 };
 
 struct NEAT_Genome {
@@ -106,10 +109,17 @@ struct NEAT_ConnectionRecord {
   uint64_t generation;
 };
 
+struct NEAT_NetworkArch {
+  uint32_t inputs;
+  uint32_t outputs;
+};
+
 struct NEAT_Context {
   // The index of the record determines the innovation
   // DO NOT CHANGE ITS ORDER!
   DA_CREATE(struct NEAT_ConnectionRecord) history;
+
+  struct NEAT_NetworkArch arch;
 
   uint32_t populationSize;
   struct NEAT_Genome *population;
