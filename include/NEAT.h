@@ -22,7 +22,7 @@
 #define DA_INIT_CAPACITY 25
 
 #define DA_APPEND(arr, item)                                            \
-  {                                                                     \
+  do {                                                                  \
     if ((arr)->count >= (arr)->capacity) {                              \
       (arr)->capacity = (arr)->capacity == 0 ? DA_INIT_CAPACITY         \
                                              : 2 * (arr)->capacity;     \
@@ -31,7 +31,7 @@
       assert((arr)->items != NULL && " Failed to allocate memory");     \
     }                                                                   \
     (arr)->items[(arr)->count++] = (item);                              \
-  }
+  } while (0)
 
 enum NEAT_NeuronKind {
 
@@ -143,11 +143,27 @@ void NEAT_printNetwork(struct NEAT_Genome *g);
 
 #ifdef NEAT_H_IMPLEMENTATION
 
-// Library stuff goes here
-
 // Returns false if a connection was not added
 bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
                            uint32_t from, struct NEAT_Context *ctx) {
+  // Check if the connection is possible
+  bool fromExists = false;
+  bool toExists = false;
+
+  for (uint64_t i = 0; i < genome->neurons.count; i++) {
+    if (genome->neurons.items[i].id == from) {
+      fromExists = true;
+    }
+
+    if (genome->neurons.items[i].id == to) {
+      toExists = true;
+    }
+  }
+
+  if (!fromExists || !toExists) {
+    return false;
+  }
+
   bool isNovelConnection = true;
   uint64_t innovation = 0;
 
@@ -191,40 +207,6 @@ bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
 
   DA_APPEND(&genome->connections, newConnection);
 
-  // Create new neurons if "from" or "to" do not exist
-  bool fromExists = false;
-  bool toExists = false;
-
-  for (uint64_t i = 0; i < genome->neurons.count; i++) {
-    if (genome->neurons.items[i].id == from) {
-      fromExists = true;
-    }
-
-    if (genome->neurons.items[i].id == to) {
-      toExists = true;
-    }
-  }
-
-  if (!fromExists) {
-    struct NEAT_Neuron newNeuron = {
-      .kind = NEAT_NEURON_KIND_HIDDEN,
-      .activation = 0.0f,
-      .id = from,
-    };
-
-    DA_APPEND(&genome->neurons, newNeuron);
-  }
-
-  if (!toExists) {
-    struct NEAT_Neuron newNeuron = {
-      .kind = NEAT_NEURON_KIND_HIDDEN,
-      .activation = 0.0f,
-      .id = to,
-    };
-
-    DA_APPEND(&genome->neurons, newNeuron);
-  }
-
   return true;
 }
 
@@ -234,7 +216,10 @@ struct NEAT_Context NEAT_constructPopulation(uint32_t inputs, uint32_t outputs,
                                              float speciationThreshold) {
   struct NEAT_Context ctx = {
     .history = { 0 },
-    .arch = { .inputs = inputs + 1, .outputs = outputs },
+    .arch = { 
+			.inputs = inputs + 1, // Extra input for bias
+      .outputs = outputs, 
+		},
     .populationSize = populationSize,
     .population = NULL,
     .targetSpecies = targetSpecies,
@@ -256,7 +241,7 @@ struct NEAT_Context NEAT_constructPopulation(uint32_t inputs, uint32_t outputs,
 
     DA_APPEND(&ctx.population[i].neurons, biasNeuron);
 
-    for (uint32_t j = 1; j < ctx.arch.inputs; j++) {
+    for (uint32_t j = 1; j < ctx.arch.inputs + ctx.arch.outputs; j++) {
       struct NEAT_Neuron n = {
         .kind = NEAT_NEURON_KIND_NONE,
         .activation = 0.0f,
@@ -271,7 +256,7 @@ struct NEAT_Context NEAT_constructPopulation(uint32_t inputs, uint32_t outputs,
         n.kind = NEAT_NEURON_KIND_OUTPUT;
       }
 
-      DA_APPEND(&ctx.population[i].neurons, n)
+      DA_APPEND(&ctx.population[i].neurons, n);
     }
 
     // Fully connect the network
