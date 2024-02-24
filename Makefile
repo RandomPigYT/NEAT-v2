@@ -48,7 +48,7 @@ clean:
 	-@rm -rf $(OBJ)
 	-@rm -rf $(BIN)
 
-run: $(TARGET)
+run: dirs $(TARGET)
 	@./$(TARGET)
 
 valgrind:
