@@ -1,7 +1,7 @@
 CC:=gcc
 LD:=gcc
 
-CFLAGS:=-Wall -Wextra -Werror -g -std=gnu17 
+CFLAGS:=-Wall -Wextra -g -std=gnu17 -I.
 LDFLAGS:=
 
 BIN:=bin
@@ -9,13 +9,15 @@ OBJ:=obj
 SRC:=src
 INCLUDE:=include
 
+VALDIR:=valdir
 
-TARGET:=$(BIN)/test
-VALGRIND_OUT:=
+
+TARGET:=$(BIN)/NEAT_gym
+VALGRIND_OUT:=$(VALDIR)/val_out.txt
 
 SRCS:=$(shell find $(SRC) -type  f -name "*.c")
 OBJS:=$(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(SRCS))
-INCLUDES:=$(shell find $(INCLUDE) -type f -name "*.h")
+INCLUDES:=$(shell find $(INCLUDE) -type f -name "*.h") $(shell find $(SRC) -type f -name "*.h")
 
 DIRS:=$(patsubst $(SRC)/%, $(OBJ)/%, $(shell find $(SRC)/ -mindepth 1 -type d))
 
@@ -31,7 +33,7 @@ $(TARGET): $(OBJS)
 	@$(CC) $(CFLAGS) $(OBJS) -o $@ $(LDFLAGS)
 	@echo built $(TARGET)
 
-$(OBJ)/%.o: $(SRC)/%.c
+$(OBJ)/%.o: $(SRC)/%.c $(INCLUDES)
 	@echo building $@
 	@$(CC) $(CFLAGS) -c $< -o $@
 	@echo built $@
