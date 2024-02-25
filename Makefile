@@ -57,7 +57,7 @@ valgrind:
          --track-origins=yes \
          --verbose \
          --log-file=$(VALGRIND_OUT) \
-         ./$(TARGET)	"test"
+         ./$(TARGET)
 
 format:
 	@clang-format $(SRCS) $(INCLUDES) --style=Google -i

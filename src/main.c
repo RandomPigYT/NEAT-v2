@@ -7,11 +7,17 @@
 
 int main(void) {
   srand(time(NULL));
-  struct NEAT_Context ctx = NEAT_constructPopulation(3, 4, 3, 5, 1.5);
+  struct NEAT_Context ctx = NEAT_constructPopulation(&(struct NEAT_Parameters){
+    .inputs = 3,
+    .outputs = 4,
+    .populationSize = 7,
+    .allowRecurrent = true,
+    .initialSpeciesTarget = 10,
+    .initialSpeciationThreshold = 1.5f,
+    .improvementDeadline = 15,
+  });
 
-  for (uint32_t i = 0; i < ctx.populationSize; i++) {
-    NEAT_printNetwork(&ctx.population[0]);
-  }
+  NEAT_printNetwork(&ctx.population[0]);
 
   return 0;
 }

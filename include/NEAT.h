@@ -1,10 +1,12 @@
 #ifndef NEAT_H
 #define NEAT_H
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 
 #define NEAT_MAX_CON_GEN_RANGE 1.0f
 #define NEAT_MIN_CON_GEN_RANGE -1.0f
@@ -31,6 +33,27 @@
       assert((arr)->items != NULL && " Failed to allocate memory");     \
     }                                                                   \
     (arr)->items[(arr)->count++] = (item);                              \
+  } while (0)
+
+#define DA_FREE(arr)     \
+  do {                   \
+    free((arr)->items);  \
+    (arr)->items = NULL; \
+    (arr)->count = 0;    \
+    (arr)->capacity = 0; \
+  } while (0)
+
+#define DA_DELETE_ITEM(arr, index)                                            \
+  do {                                                                        \
+    assert((arr)->count != 0 && "Attempted to pop from empty dynamic array"); \
+    assert((index) >= 0 && (index) < (arr)->count && "Invalid index");        \
+    if ((index) == (arr)->count - 1) {                                        \
+      (arr)->count--;                                                         \
+    } else {                                                                  \
+      memmove(&((arr)->items[index]), &((arr)->items[index + 1]),             \
+              ((arr)->count - index) * sizeof(*(arr)->items));                \
+      (arr)->count--;                                                         \
+    }                                                                         \
   } while (0)
 
 enum NEAT_NeuronKind {
@@ -91,6 +114,8 @@ struct NEAT_Genome {
   DA_CREATE(struct NEAT_Neuron) neurons;
 
   uint32_t species;
+
+  float fitness;
 };
 
 struct NEAT_Species {
@@ -124,10 +149,26 @@ struct NEAT_Context {
   uint32_t populationSize;
   struct NEAT_Genome *population;
 
+  bool allowRecurrent;
+
   uint32_t targetSpecies;
   float speciationThreshold;
 
+  uint32_t improvementDeadline;
+
   uint32_t currentGeneration;
+};
+
+struct NEAT_Parameters {
+  uint32_t inputs, outputs;
+  uint32_t populationSize;
+
+  bool allowRecurrent;
+
+  uint32_t initialSpeciesTarget;
+  float initialSpeciationThreshold;
+
+  uint32_t improvementDeadline;
 };
 
 // Returns false if a connection was not added
@@ -135,10 +176,15 @@ bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
                            uint32_t from, bool createMissingNeurons,
                            struct NEAT_Context *ctx);
 
-struct NEAT_Context NEAT_constructPopulation(uint32_t inputs, uint32_t outputs,
-                                             uint32_t populationSize,
-                                             uint32_t targetSpecies,
-                                             float speciationThreshold);
+struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx);
+
+//struct NEAT_Context NEAT_constructPopulation(uint32_t inputs, uint32_t outputs,
+//																						 uint32_t populationSize,
+//																						 uint32_t targetSpecies,
+//																						 float speciationThreshold);
+
+struct NEAT_Context
+NEAT_constructPopulation(const struct NEAT_Parameters *parameters);
 
 void NEAT_printNetwork(struct NEAT_Genome *g);
 
@@ -279,20 +325,20 @@ struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx) {
   return genome;
 }
 
-struct NEAT_Context NEAT_constructPopulation(uint32_t inputs, uint32_t outputs,
-                                             uint32_t populationSize,
-                                             uint32_t targetSpecies,
-                                             float speciationThreshold) {
+struct NEAT_Context
+NEAT_constructPopulation(const struct NEAT_Parameters *parameters) {
   struct NEAT_Context ctx = {
     .history = { 0 },
     .arch = { 
-			.inputs = inputs + 1, // Extra input for bias
-      .outputs = outputs, 
+			.inputs = parameters->inputs + 1, // Extra input for bias
+      .outputs = parameters->outputs, 
 		},
-    .populationSize = populationSize,
+    .populationSize = parameters->populationSize,
     .population = NULL,
-    .targetSpecies = targetSpecies,
-    .speciationThreshold = speciationThreshold,
+		.allowRecurrent = parameters->allowRecurrent,
+    .targetSpecies = parameters->initialSpeciesTarget,
+    .speciationThreshold = parameters->initialSpeciationThreshold,
+		.improvementDeadline = parameters->improvementDeadline,
     .currentGeneration = 0,
   };
 
