@@ -10,7 +10,7 @@ int main(void) {
   struct NEAT_Context ctx = NEAT_constructPopulation(3, 4, 3, 5, 1.5);
 
   for (uint32_t i = 0; i < ctx.populationSize; i++) {
-    NEAT_printNetwork(&ctx.population[i]);
+    NEAT_printNetwork(&ctx.population[0]);
   }
 
   return 0;

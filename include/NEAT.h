@@ -132,7 +132,8 @@ struct NEAT_Context {
 
 // Returns false if a connection was not added
 bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
-                           uint32_t from, struct NEAT_Context *ctx);
+                           uint32_t from, bool createMissingNeurons,
+                           struct NEAT_Context *ctx);
 
 struct NEAT_Context NEAT_constructPopulation(uint32_t inputs, uint32_t outputs,
                                              uint32_t populationSize,
@@ -145,7 +146,8 @@ void NEAT_printNetwork(struct NEAT_Genome *g);
 
 // Returns false if a connection was not added
 bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
-                           uint32_t from, struct NEAT_Context *ctx) {
+                           uint32_t from, bool createMissingNeurons,
+                           struct NEAT_Context *ctx) {
   // Check if the connection is possible
   bool fromExists = false;
   bool toExists = false;
@@ -160,8 +162,30 @@ bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
     }
   }
 
-  if (!fromExists || !toExists) {
+  if ((!fromExists || !toExists) && !createMissingNeurons) {
     return false;
+  }
+
+  if (!fromExists) {
+    struct NEAT_Neuron n = {
+      .id = from,
+      .kind = NEAT_NEURON_KIND_HIDDEN,
+      .activation = 0.0f,
+      .layer = 0,
+    };
+
+    DA_APPEND(&genome->neurons, n);
+  }
+
+  if (!toExists) {
+    struct NEAT_Neuron n = {
+      .id = to,
+      .kind = NEAT_NEURON_KIND_HIDDEN,
+      .activation = 0.0f,
+      .layer = 0,
+    };
+
+    DA_APPEND(&genome->neurons, n);
   }
 
   bool isNovelConnection = true;
@@ -210,6 +234,51 @@ bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
   return true;
 }
 
+struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx) {
+  struct NEAT_Genome genome = {
+    .connections = { 0 },
+    .neurons = { 0 },
+    .species = 0,
+  };
+
+  struct NEAT_Neuron biasNeuron = {
+    .kind = NEAT_NEURON_KIND_BIAS,
+    .activation = 1.0f,
+    .id = 0,
+    .layer = 0,
+  };
+
+  DA_APPEND(&genome.neurons, biasNeuron);
+
+  for (uint32_t j = 1; j < ctx->arch.inputs + ctx->arch.outputs; j++) {
+    struct NEAT_Neuron n = {
+      .kind = NEAT_NEURON_KIND_NONE,
+      .activation = 0.0f,
+      .id = j,
+      .layer = 0,
+    };
+
+    if (j < ctx->arch.inputs) {
+      n.kind = NEAT_NEURON_KIND_INPUT;
+
+    } else {
+      n.kind = NEAT_NEURON_KIND_OUTPUT;
+    }
+
+    DA_APPEND(&genome.neurons, n);
+  }
+
+  // Fully connect the network
+  for (uint32_t j = 0; j < ctx->arch.inputs; j++) {
+    for (uint32_t k = ctx->arch.inputs;
+         k < ctx->arch.inputs + ctx->arch.outputs; k++) {
+      NEAT_createConnection(&genome, k, j, false, ctx);
+    }
+  }
+
+  return genome;
+}
+
 struct NEAT_Context NEAT_constructPopulation(uint32_t inputs, uint32_t outputs,
                                              uint32_t populationSize,
                                              uint32_t targetSpecies,
@@ -231,41 +300,7 @@ struct NEAT_Context NEAT_constructPopulation(uint32_t inputs, uint32_t outputs,
   assert(ctx.population != NULL && "Failed to allocate memory for population");
 
   for (uint32_t i = 0; i < ctx.populationSize; i++) {
-    // Add neurons
-    struct NEAT_Neuron biasNeuron = {
-      .kind = NEAT_NEURON_KIND_BIAS,
-      .activation = 1.0f,
-      .id = 0,
-      .layer = 0,
-    };
-
-    DA_APPEND(&ctx.population[i].neurons, biasNeuron);
-
-    for (uint32_t j = 1; j < ctx.arch.inputs + ctx.arch.outputs; j++) {
-      struct NEAT_Neuron n = {
-        .kind = NEAT_NEURON_KIND_NONE,
-        .activation = 0.0f,
-        .id = j,
-        .layer = 0,
-      };
-
-      if (j < ctx.arch.inputs) {
-        n.kind = NEAT_NEURON_KIND_INPUT;
-
-      } else {
-        n.kind = NEAT_NEURON_KIND_OUTPUT;
-      }
-
-      DA_APPEND(&ctx.population[i].neurons, n);
-    }
-
-    // Fully connect the network
-    for (uint32_t j = 0; j < ctx.arch.inputs; j++) {
-      for (uint32_t k = ctx.arch.inputs; k < ctx.arch.inputs + ctx.arch.outputs;
-           k++) {
-        NEAT_createConnection(&ctx.population[i], k, j, &ctx);
-      }
-    }
+    ctx.population[i] = NEAT_constructNetwork(&ctx);
   }
 
   return ctx;
