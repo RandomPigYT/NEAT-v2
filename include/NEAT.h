@@ -46,7 +46,7 @@
 #define DA_DELETE_ITEM(arr, index)                                            \
   do {                                                                        \
     assert((arr)->count != 0 && "Attempted to pop from empty dynamic array"); \
-    assert((index) >= 0 && (index) < (arr)->count && "Invalid index");        \
+    assert((index) < (arr)->count && "Invalid index");                        \
     if ((index) == (arr)->count - 1) {                                        \
       (arr)->count--;                                                         \
     } else {                                                                  \
@@ -93,6 +93,8 @@ struct NEAT_Connection {
   uint32_t to;
 
   float weight;
+
+  enum NEAT_ConnectionKind kind;
 
   uint64_t innovation;
 
@@ -144,6 +146,8 @@ struct NEAT_Context {
   // DO NOT CHANGE ITS ORDER!
   DA_CREATE(struct NEAT_ConnectionRecord) history;
 
+  DA_CREATE(struct NEAT_Species) species;
+
   struct NEAT_NetworkArch arch;
 
   uint32_t populationSize;
@@ -185,6 +189,7 @@ struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx);
 
 struct NEAT_Context
 NEAT_constructPopulation(const struct NEAT_Parameters *parameters);
+void NEAT_cleanup(struct NEAT_Context *ctx);
 
 void NEAT_printNetwork(struct NEAT_Genome *g);
 
@@ -271,6 +276,7 @@ bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
     .from = from,
     .to = to,
     .weight = weight,
+    .kind = NEAT_CON_KIND_FORWARD,
     .innovation = innovation,
     .enabled = true,
   };
@@ -329,6 +335,7 @@ struct NEAT_Context
 NEAT_constructPopulation(const struct NEAT_Parameters *parameters) {
   struct NEAT_Context ctx = {
     .history = { 0 },
+		.species = { 0 },
     .arch = { 
 			.inputs = parameters->inputs + 1, // Extra input for bias
       .outputs = parameters->outputs, 
@@ -380,11 +387,35 @@ void NEAT_printNetwork(struct NEAT_Genome *g) {
   }
 
   for (uint32_t i = 0; i < g->connections.count; i++) {
-    printf("innovation: %ld\tfrom: %d\tto: %d\tweight: %f\tenabled: %s\n",
-           g->connections.items[i].innovation, g->connections.items[i].from,
-           g->connections.items[i].to, g->connections.items[i].weight,
-           g->connections.items[i].enabled ? "true" : "false");
+    const char *kind;
+    switch (g->connections.items[i].kind) {
+      case NEAT_CON_KIND_FORWARD:
+        kind = "FWD";
+        break;
+      case NEAT_CON_KIND_RECURRENT:
+        kind = "REC";
+        break;
+      default:
+        assert(0 && "Unreachable");
+        break;
+    }
+    printf(
+      "innovation: %ld\tfrom: %d\tto: %d\tweight: %f\tkind: %s\tenabled: %s\n",
+      g->connections.items[i].innovation, g->connections.items[i].from,
+      g->connections.items[i].to, g->connections.items[i].weight, kind,
+      g->connections.items[i].enabled ? "true" : "false");
   }
+}
+
+void NEAT_cleanup(struct NEAT_Context *ctx) {
+  for (uint32_t i = 0; i < ctx->populationSize; i++) {
+    DA_FREE(&ctx->population[i].connections);
+    DA_FREE(&ctx->population[i].neurons);
+  }
+
+  DA_FREE(&ctx->history);
+
+  free(ctx->population);
 }
 
 #endif // NEAT_H_IMPLEMENTATION
