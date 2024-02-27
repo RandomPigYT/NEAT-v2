@@ -85,6 +85,7 @@ void NEAT_layer(struct NEAT_Context *ctx) {
   }
 }
 
+// This code is actual garbage
 void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
                  uint32_t h) {
   float radius = 0.01f * w;
@@ -119,7 +120,8 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
 
       for (uint32_t k = 0; k < g->connections.count; k++) {
         if (g->connections.items[k].from ==
-            g->neurons.items[neuronsInLayer.items[j]].id) {
+              g->neurons.items[neuronsInLayer.items[j]].id &&
+            g->connections.items[k].enabled) {
           DA_APPEND(&connections, k);
         }
       }
@@ -152,13 +154,12 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
             neuronsInLayer2++;
           }
         }
-
         uint32_t vpad2 = h / neuronsInLayer2;
 
         uint32_t cx2 =
           x + radius + g->neurons.items[toNeurons.items[k]].layer * hpad;
         uint32_t cy2 = (y + radius) +
-                       ((h - (neuronsInLayer.count - 1) * vpad) / 2) +
+                       ((h - (neuronsInLayer2 - 1) * vpad2) / 2) +
                        indexInLayer * vpad2;
 
         DrawLine(cx1, cy1, cx2, cy2, colour);
@@ -191,13 +192,33 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
 
     DA_FREE(&neuronsInLayer);
   }
+
+  //  exit(0);
+}
+
+void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
+                          struct NEAT_Context *ctx) {
+  assert(connection < g->connections.count && "Invalid connection index");
+  g->connections.items[connection].enabled = false;
+
+  uint32_t maxNeuronId = 0;
+  for (uint32_t i = 0; i < g->neurons.count; i++) {
+    maxNeuronId = g->neurons.items[i].id > maxNeuronId ? g->neurons.items[i].id
+                                                       : maxNeuronId;
+  }
+
+  NEAT_createConnection(g, maxNeuronId + 1,
+                        g->connections.items[connection].from, true, ctx);
+
+  NEAT_createConnection(g, g->connections.items[connection].to, maxNeuronId + 1,
+                        true, ctx);
 }
 
 int main(void) {
   srand(time(NULL));
   struct NEAT_Context ctx = NEAT_constructPopulation(&(struct NEAT_Parameters){
     .inputs = 3,
-    .outputs = 4,
+    .outputs = 10,
     .populationSize = 7,
     .allowRecurrent = true,
     .initialSpeciesTarget = 10,
@@ -205,15 +226,29 @@ int main(void) {
     .improvementDeadline = 15,
   });
 
-  NEAT_createConnection(&ctx.population[0], 69, 3, true, &ctx);
-  NEAT_createConnection(&ctx.population[0], 6, 69, true, &ctx);
+  //NEAT_createConnection(&ctx.population[0], 69, 3, true, &ctx);
+  //NEAT_createConnection(&ctx.population[0], 6, 69, true, &ctx);
 
-  //NEAT_createConnection(&ctx.population[0], 420, 69, true, &ctx);
-  //NEAT_createConnection(&ctx.population[0], 69420, 2, true, &ctx);
-  //NEAT_createConnection(&ctx.population[0], 4, 69420, true, &ctx);
-  //NEAT_createConnection(&ctx.population[0], 6, 420, false, &ctx);
-  //NEAT_createConnection(&ctx.population[0], 80085, 420, true, &ctx);
-  //NEAT_createConnection(&ctx.population[0], 6, 80085, false, &ctx);
+  //for (uint32_t i = 0; i < ctx.population[0].connections.count; i++) {
+  //  if (ctx.population[0].connections.items[i].to == 6 &&
+  //      ctx.population[0].connections.items[i].from == 3) {
+  //    ctx.population[0].connections.items[i].enabled = false;
+  //  }
+  //}
+
+  ////NEAT_createConnection(&ctx.population[0], 420, 69, true, &ctx);
+  ////NEAT_createConnection(&ctx.population[0], 69420, 2, true, &ctx);
+  ////NEAT_createConnection(&ctx.population[0], 4, 69420, true, &ctx);
+  ////NEAT_createConnection(&ctx.population[0], 6, 420, false, &ctx);
+  ////NEAT_createConnection(&ctx.population[0], 80085, 420, true, &ctx);
+  ////NEAT_createConnection(&ctx.population[0], 6, 80085, false, &ctx);
+
+  NEAT_splitConnection(&ctx.population[0], 0, &ctx);
+
+  for (int i = 0; i < 10; i++) {
+    NEAT_splitConnection(&ctx.population[0],
+                         ctx.population[0].connections.count - 1, &ctx);
+  }
 
   NEAT_layer(&ctx);
 
