@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 #include <raylib.h>
 
@@ -217,38 +218,14 @@ void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
 int main(void) {
   srand(time(NULL));
   struct NEAT_Context ctx = NEAT_constructPopulation(&(struct NEAT_Parameters){
-    .inputs = 3,
-    .outputs = 10,
+    .inputs = 1,
+    .outputs = 1,
     .populationSize = 7,
     .allowRecurrent = true,
     .initialSpeciesTarget = 10,
     .initialSpeciationThreshold = 1.5f,
     .improvementDeadline = 15,
   });
-
-  //NEAT_createConnection(&ctx.population[0], 69, 3, true, &ctx);
-  //NEAT_createConnection(&ctx.population[0], 6, 69, true, &ctx);
-
-  //for (uint32_t i = 0; i < ctx.population[0].connections.count; i++) {
-  //  if (ctx.population[0].connections.items[i].to == 6 &&
-  //      ctx.population[0].connections.items[i].from == 3) {
-  //    ctx.population[0].connections.items[i].enabled = false;
-  //  }
-  //}
-
-  ////NEAT_createConnection(&ctx.population[0], 420, 69, true, &ctx);
-  ////NEAT_createConnection(&ctx.population[0], 69420, 2, true, &ctx);
-  ////NEAT_createConnection(&ctx.population[0], 4, 69420, true, &ctx);
-  ////NEAT_createConnection(&ctx.population[0], 6, 420, false, &ctx);
-  ////NEAT_createConnection(&ctx.population[0], 80085, 420, true, &ctx);
-  ////NEAT_createConnection(&ctx.population[0], 6, 80085, false, &ctx);
-
-  NEAT_splitConnection(&ctx.population[0], 0, &ctx);
-
-  for (int i = 0; i < 10; i++) {
-    NEAT_splitConnection(&ctx.population[0],
-                         ctx.population[0].connections.count - 1, &ctx);
-  }
 
   NEAT_layer(&ctx);
 
@@ -261,11 +238,41 @@ int main(void) {
   uint32_t height = 9 * factor;
 
   InitWindow(width, height, "NEAT");
-  SetWindowState(FLAG_WINDOW_RESIZABLE);
+  SetWindowState(FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_MAXIMIZED);
 
   uint32_t bgColour = 0xff181818;
 
+  uint32_t i = 0;
+  float t = 0;
   while (!WindowShouldClose()) {
+    if (GetKeyPressed() == KEY_R) {
+      NEAT_cleanup(&ctx);
+
+      uint32_t inps = ((float)rand() / (float)RAND_MAX) * (5 - 1) + 1;
+      uint32_t outs = ((float)rand() / (float)RAND_MAX) * (7 - 1) + 1;
+
+      ctx = NEAT_constructPopulation(&(struct NEAT_Parameters){
+        .inputs = inps,
+        .outputs = outs,
+        .populationSize = 7,
+        .allowRecurrent = true,
+        .initialSpeciesTarget = 10,
+        .initialSpeciationThreshold = 1.5f,
+        .improvementDeadline = 15,
+      });
+
+      i = 0;
+    }
+    t += GetFrameTime();
+
+    if (t >= 1.0f && i < 10) {
+      uint32_t con = rand() % ctx.population[0].connections.count;
+      NEAT_splitConnection(&ctx.population[0], con, &ctx);
+      NEAT_layer(&ctx);
+      i++;
+      t = 0.0f;
+    }
+
     width = GetRenderWidth();
     height = GetRenderHeight();
     ClearBackground(*(Color *)&bgColour);

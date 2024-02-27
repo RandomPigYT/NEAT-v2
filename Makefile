@@ -2,7 +2,7 @@ CC:=gcc
 LD:=gcc
 
 CFLAGS:=-Wall -Wextra -g -std=gnu17 -I. $(pkg-config --cflags raylib) -ffunction-sections -fdata-sections -Wl,--gc-sections
-LDFLAGS:= -lraylib
+LDFLAGS:= -lraylib -lm
 
 BIN:=bin
 OBJ:=obj
