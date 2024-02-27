@@ -1,8 +1,8 @@
 CC:=gcc
 LD:=gcc
 
-CFLAGS:=-Wall -Wextra -g -std=gnu17 -I.
-LDFLAGS:=
+CFLAGS:=-Wall -Wextra -g -std=gnu17 -I. $(pkg-config --cflags raylib) -ffunction-sections -fdata-sections -Wl,--gc-sections
+LDFLAGS:= -lraylib
 
 BIN:=bin
 OBJ:=obj
@@ -12,7 +12,7 @@ INCLUDE:=include
 VALDIR:=valdir
 
 
-TARGET:=$(BIN)/NEAT_gym
+TARGET:=$(BIN)/NEAT_test
 VALGRIND_OUT:=$(VALDIR)/val_out.txt
 
 SRCS:=$(shell find $(SRC) -type  f -name "*.c")
