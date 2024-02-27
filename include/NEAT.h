@@ -262,9 +262,9 @@ bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
   } else {
     // Check if the connection already exists in the genome
     for (uint64_t i = 0; i < genome->connections.count; i++) {
-      // TODO: Fix this by checking for end-points of the connection
-      if (genome->connections.items[i].innovation == innovation)
+      if (genome->connections.items[i].innovation == innovation) {
         return false;
+      }
     }
   }
 
