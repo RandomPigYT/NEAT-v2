@@ -150,6 +150,14 @@ int main(void) {
     .improvementDeadline = 15,
   });
 
+  ctx.currentGeneration++;
+  DA_FREE(&ctx.history);
+
+  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 3, 0, false,
+                        &ctx);
+
+  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 3, 1, false,
+                        &ctx);
   NEAT_layer(&ctx);
 
   for (uint32_t i = 0; i < ctx.populationSize; i++) {

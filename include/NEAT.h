@@ -132,7 +132,9 @@ struct NEAT_ConnectionRecord {
   uint32_t to;
   uint32_t from;
 
-  uint64_t generation;
+  //uint64_t generation;
+
+  uint64_t innovation;
 };
 
 struct NEAT_NetworkArch {
@@ -141,8 +143,9 @@ struct NEAT_NetworkArch {
 };
 
 struct NEAT_Context {
-  // The index of the record determines the innovation
-  // DO NOT CHANGE ITS ORDER!
+  uint64_t globalInnovation;
+
+  // Reinitialised every generation
   DA_CREATE(struct NEAT_ConnectionRecord) history;
 
   DA_CREATE(struct NEAT_Species) species;
@@ -251,21 +254,20 @@ bool NEAT_createConnection(struct NEAT_Genome *genome,
 
   for (uint64_t i = 0; i < ctx->history.count; i++) {
     struct NEAT_ConnectionRecord temp = ctx->history.items[i];
-    if (temp.generation == ctx->currentGeneration && temp.from == from &&
-        temp.to == to) {
+    if (temp.from == from && temp.to == to) {
       isNovelConnection = false;
-      innovation = i;
+      innovation = temp.innovation;
     }
   }
 
   if (isNovelConnection) {
     struct NEAT_ConnectionRecord temp = {
-      .generation = ctx->currentGeneration,
       .from = from,
       .to = to,
+      .innovation = ctx->globalInnovation++,
     };
 
-    innovation = ctx->history.count;
+    innovation = temp.innovation;
     DA_APPEND(&ctx->history, temp);
   } else {
     // Check if the connection already exists in the genome
