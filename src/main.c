@@ -87,9 +87,19 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
                        indexInLayer * vpad2;
 
         float weight = g->connections.items[connections.items[k]].weight;
-        float thickness = fabs(0.005 * h * weight);
+        float thickness = 0.005f * h;
 
         colour = weight >= 0 ? GREEN : RED;
+
+        uint8_t alpha = fabs(weight) > 1.0f ? 255 : weight * 255;
+
+        // colour = ColorAlphaBlend(
+        //   colour, CLITERAL(Color){ .a = alpha, .r = 25, .g = 25, .b = 25 },
+        //   WHITE);
+
+        colour = ColorAlphaBlend(
+          colour, CLITERAL(Color){ .a = alpha, .r = 35, .g = 35, .b = 35 },
+          WHITE);
 
         DrawLineEx(CLITERAL(Vector2){ cx1, cy1 }, CLITERAL(Vector2){ cx2, cy2 },
                    thickness, colour);
@@ -126,7 +136,7 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
   }
 }
 
-void NEAT_mutate(struct NEAT_Genome *g) {
+void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase) {
   // Types of mutations:
   // -> nudging the weight of a connection
   // -> randomizing the wieght of a connection
@@ -134,17 +144,15 @@ void NEAT_mutate(struct NEAT_Genome *g) {
   // -> adding a neuron
   // -> removing a connection
   // -> removing a neuron
-
-  (void)g;
 }
 
 int main(void) {
   srand(time(NULL));
   struct NEAT_Context ctx = NEAT_constructPopulation(&(struct NEAT_Parameters){
-    .inputs = 2,
-    .outputs = 1,
+    .inputs = 4,
+    .outputs = 4,
     .populationSize = 7,
-    .allowRecurrent = true,
+    .allowRecurrent = false,
     .initialSpeciesTarget = 10,
     .initialSpeciationThreshold = 1.5f,
     .improvementDeadline = 15,
@@ -192,6 +200,7 @@ int main(void) {
         .improvementDeadline = 15,
       });
 
+      NEAT_layer(&ctx);
       i = 0;
     }
     t += GetFrameTime();

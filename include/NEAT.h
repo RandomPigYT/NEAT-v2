@@ -87,6 +87,13 @@ enum NEAT_ConnectionKind {
 
 };
 
+enum NEAT_Phase {
+
+  NEAT_COMPLEXIFY,
+  NEAT_PRUNE,
+
+};
+
 struct NEAT_Connection {
   uint32_t from;
   uint32_t to;
@@ -120,7 +127,7 @@ struct NEAT_Genome {
 };
 
 struct NEAT_Species {
-  DA_CREATE(struct NEAT_Genome *) genomes;
+  DA_CREATE(uint32_t) genomes;
 
   float currentFitness;
 
@@ -157,10 +164,22 @@ struct NEAT_Context {
 
   bool allowRecurrent;
 
+  // Elites are treated reproduced separately
+  float elitismProportion;
+
+  float asexualProportion;
+  float sexualProportion;
+
+  // Applies to sexual reproducers
+  float interspeciesProbability;
+
   uint32_t targetSpecies;
   float speciationThreshold;
 
   uint32_t improvementDeadline;
+
+  uint32_t prunePhaseThreshold;
+  uint32_t pruneProbationTime;
 
   uint32_t currentGeneration;
 };
@@ -175,6 +194,9 @@ struct NEAT_Parameters {
   float initialSpeciationThreshold;
 
   uint32_t improvementDeadline;
+
+  uint32_t prunePhaseThreshold;
+  uint32_t pruneProbationTime;
 };
 
 // Returns false if a connection was not added
@@ -356,6 +378,8 @@ NEAT_constructPopulation(const struct NEAT_Parameters *parameters) {
     .targetSpecies = parameters->initialSpeciesTarget,
     .speciationThreshold = parameters->initialSpeciationThreshold,
 		.improvementDeadline = parameters->improvementDeadline,
+		.prunePhaseThreshold = parameters->prunePhaseThreshold,
+		.pruneProbationTime = parameters->pruneProbationTime,
     .currentGeneration = 0,
   };
 
