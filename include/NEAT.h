@@ -182,11 +182,6 @@ bool NEAT_createConnection(struct NEAT_Genome *genome,
 
 struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx);
 
-//struct NEAT_Context NEAT_constructPopulation(uint32_t inputs, uint32_t outputs,
-//																						 uint32_t populationSize,
-//																						 uint32_t targetSpecies,
-//																						 float speciationThreshold);
-
 void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
                           struct NEAT_Context *ctx);
 

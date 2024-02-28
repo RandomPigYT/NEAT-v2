@@ -86,7 +86,15 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
                        ((h - (neuronsInLayer2 - 1) * vpad2) / 2.0f) +
                        indexInLayer * vpad2;
 
-        DrawLine(cx1, cy1, cx2, cy2, colour);
+        float weight = g->connections.items[connections.items[k]].weight;
+        float thickness = fabs(0.005 * h * weight);
+
+        colour = weight >= 0 ? GREEN : RED;
+
+        DrawLineEx(CLITERAL(Vector2){ cx1, cy1 }, CLITERAL(Vector2){ cx2, cy2 },
+                   thickness, colour);
+
+        //DrawLine(cx1, cy1, cx2, cy2, colour);
       }
 
       DA_FREE(&toNeurons);
@@ -126,6 +134,8 @@ void NEAT_mutate(struct NEAT_Genome *g) {
   // -> adding a neuron
   // -> removing a connection
   // -> removing a neuron
+
+  (void)g;
 }
 
 int main(void) {
@@ -149,7 +159,7 @@ int main(void) {
   uint32_t factor = 120;
   uint32_t width = 16 * factor;
   uint32_t height = 9 * factor;
-
+  SetConfigFlags(FLAG_MSAA_4X_HINT);
   InitWindow(width, height, "NEAT");
   SetWindowState(FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_MAXIMIZED);
 
