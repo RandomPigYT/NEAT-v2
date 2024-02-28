@@ -175,7 +175,8 @@ struct NEAT_Parameters {
 };
 
 // Returns false if a connection was not added
-bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
+bool NEAT_createConnection(struct NEAT_Genome *genome,
+                           enum NEAT_ConnectionKind kind, uint32_t to,
                            uint32_t from, bool createMissingNeurons,
                            struct NEAT_Context *ctx);
 
@@ -186,8 +187,19 @@ struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx);
 //																						 uint32_t targetSpecies,
 //																						 float speciationThreshold);
 
+void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
+                          struct NEAT_Context *ctx);
+
 struct NEAT_Context
 NEAT_constructPopulation(const struct NEAT_Parameters *parameters);
+
+int64_t NEAT_findNeuron(struct NEAT_Genome *g, uint32_t id);
+
+uint32_t NEAT_layerNeuron(struct NEAT_Genome *g, uint32_t neuronIndex,
+                          uint32_t runningLayerCount);
+
+void NEAT_layer(struct NEAT_Context *ctx);
+
 void NEAT_cleanup(struct NEAT_Context *ctx);
 
 void NEAT_printNetwork(struct NEAT_Genome *g);
@@ -195,7 +207,8 @@ void NEAT_printNetwork(struct NEAT_Genome *g);
 #ifdef NEAT_H_IMPLEMENTATION
 
 // Returns false if a connection was not added
-bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
+bool NEAT_createConnection(struct NEAT_Genome *genome,
+                           enum NEAT_ConnectionKind kind, uint32_t to,
                            uint32_t from, bool createMissingNeurons,
                            struct NEAT_Context *ctx) {
   // Check if the connection is possible
@@ -276,7 +289,7 @@ bool NEAT_createConnection(struct NEAT_Genome *genome, uint32_t to,
     .from = from,
     .to = to,
     .weight = weight,
-    .kind = NEAT_CON_KIND_FORWARD,
+    .kind = kind,
     .innovation = innovation,
     .enabled = true,
   };
@@ -324,7 +337,7 @@ struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx) {
   for (uint32_t j = 0; j < ctx->arch.inputs; j++) {
     for (uint32_t k = ctx->arch.inputs;
          k < ctx->arch.inputs + ctx->arch.outputs; k++) {
-      NEAT_createConnection(&genome, k, j, false, ctx);
+      NEAT_createConnection(&genome, NEAT_CON_KIND_FORWARD, k, j, false, ctx);
     }
   }
 
@@ -357,6 +370,26 @@ NEAT_constructPopulation(const struct NEAT_Parameters *parameters) {
   }
 
   return ctx;
+}
+
+void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
+                          struct NEAT_Context *ctx) {
+  assert(connection < g->connections.count && "Invalid connection index");
+  g->connections.items[connection].enabled = false;
+
+  uint32_t maxNeuronId = 0;
+  for (uint32_t i = 0; i < g->neurons.count; i++) {
+    maxNeuronId = g->neurons.items[i].id > maxNeuronId ? g->neurons.items[i].id
+                                                       : maxNeuronId;
+  }
+
+  enum NEAT_ConnectionKind kind = g->connections.items[connection].kind;
+
+  NEAT_createConnection(g, kind, maxNeuronId + 1,
+                        g->connections.items[connection].from, true, ctx);
+
+  NEAT_createConnection(g, kind, g->connections.items[connection].to,
+                        maxNeuronId + 1, true, ctx);
 }
 
 void NEAT_printNetwork(struct NEAT_Genome *g) {
@@ -407,6 +440,84 @@ void NEAT_printNetwork(struct NEAT_Genome *g) {
   }
 }
 
+int64_t NEAT_findNeuron(struct NEAT_Genome *g, uint32_t id) {
+  int64_t index = -1;
+  for (uint32_t i = 0; i < g->neurons.count; i++) {
+    if (g->neurons.items[i].id == id)
+      index = i;
+  }
+  return index;
+}
+
+uint32_t NEAT_layerNeuron(struct NEAT_Genome *g, uint32_t neuronIndex,
+                          uint32_t runningLayerCount) {
+  if (g->neurons.items[neuronIndex].kind == NEAT_NEURON_KIND_INPUT ||
+      g->neurons.items[neuronIndex].kind == NEAT_NEURON_KIND_BIAS) {
+    return runningLayerCount;
+  }
+
+  DA_CREATE(uint32_t) inConnections = { 0 };
+
+  for (uint32_t i = 0; i < g->connections.count; i++) {
+    if (g->connections.items[i].enabled &&
+        g->connections.items[i].kind == NEAT_CON_KIND_FORWARD &&
+        g->connections.items[i].to == g->neurons.items[neuronIndex].id) {
+      DA_APPEND(&inConnections, i);
+    }
+  }
+
+  if (!inConnections.count) {
+    if (runningLayerCount == 0)
+      return 1;
+
+    return runningLayerCount;
+  }
+
+  uint32_t maxLayer = 0;
+  for (uint32_t i = 0; i < inConnections.count; i++) {
+    int64_t neuronIndex =
+      NEAT_findNeuron(g, g->connections.items[inConnections.items[i]].from);
+    assert(neuronIndex >= 0 && "invalid connection");
+
+    uint32_t temp = NEAT_layerNeuron(g, neuronIndex, runningLayerCount + 1);
+    maxLayer = temp > maxLayer ? temp : maxLayer;
+  }
+
+  DA_FREE(&inConnections);
+  return maxLayer;
+}
+
+void NEAT_layer(struct NEAT_Context *ctx) {
+  for (uint32_t i = 0; i < ctx->populationSize; i++) {
+    struct NEAT_Genome *g = &ctx->population[i];
+
+    for (uint32_t neuron = 0; neuron < g->neurons.count; neuron++) {
+      g->neurons.items[neuron].layer = NEAT_layerNeuron(g, neuron, 0);
+    }
+
+    uint32_t maxLayer = 0;
+    for (uint32_t neuron = 0; neuron < g->neurons.count; neuron++) {
+      if (g->neurons.items[neuron].kind != NEAT_NEURON_KIND_OUTPUT) {
+        maxLayer = g->neurons.items[neuron].layer > maxLayer
+                     ? g->neurons.items[neuron].layer
+                     : maxLayer;
+      }
+    }
+
+    for (uint32_t neuron = 0; neuron < g->neurons.count; neuron++) {
+      if (g->neurons.items[neuron].kind == NEAT_NEURON_KIND_OUTPUT) {
+        g->neurons.items[neuron].layer = maxLayer + 1;
+      }
+
+      if (g->neurons.items[neuron].layer == 0 &&
+          (g->neurons.items[neuron].kind != NEAT_NEURON_KIND_INPUT &&
+           g->neurons.items[neuron].kind != NEAT_NEURON_KIND_BIAS)) {
+        g->neurons.items[neuron].layer = 1;
+      }
+    }
+  }
+}
+
 void NEAT_cleanup(struct NEAT_Context *ctx) {
   for (uint32_t i = 0; i < ctx->populationSize; i++) {
     DA_FREE(&ctx->population[i].connections);
@@ -417,7 +528,6 @@ void NEAT_cleanup(struct NEAT_Context *ctx) {
 
   free(ctx->population);
 }
-
 #endif // NEAT_H_IMPLEMENTATION
 
 #endif // NEAT_H
