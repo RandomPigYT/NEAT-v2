@@ -7,9 +7,12 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <math.h>
 
 #define NEAT_MAX_CON_GEN_RANGE 1.0f
 #define NEAT_MIN_CON_GEN_RANGE -1.0f
+
+#define NEAT_EPSILON 1e-6f
 
 #define TO_STR__(x) #x
 #define TO_STR(x) TO_STR__(x)
@@ -127,6 +130,8 @@ struct NEAT_Genome {
 };
 
 struct NEAT_Species {
+  struct NEAT_Genome representative;
+
   DA_CREATE(uint32_t) genomes;
 
   float currentFitness;
@@ -164,6 +169,17 @@ struct NEAT_Context {
 
   bool allowRecurrent;
 
+  float parentMutationProbability;
+  float childMutationProbability;
+  uint32_t maxMutationsPerGeneration;
+
+  float weightNudgeProbability;
+  float weightRandomizeProbability;
+  float connectionAddProbability;
+  float neuronAddProbability;
+  float connectionDeleteProbability;
+  float neuronDeleteProbability;
+
   // Elites are treated reproduced separately
   float elitismProportion;
 
@@ -185,10 +201,26 @@ struct NEAT_Context {
 };
 
 struct NEAT_Parameters {
-  uint32_t inputs, outputs;
+  uint32_t inputs;
+  uint32_t outputs;
   uint32_t populationSize;
 
   bool allowRecurrent;
+
+  float parentMutationProbability;
+  float childMutationProbability;
+  uint32_t maxMutationsPerGeneration;
+
+  float weightNudgeProbability;
+  float weightRandomizeProbability;
+  float connectionAddProbability;
+  float neuronAddProbability;
+  float connectionDeleteProbability;
+  float neuronDeleteProbability;
+
+  float elitismProportion;
+  float sexualProportion;
+  float interspeciesProbability;
 
   uint32_t initialSpeciesTarget;
   float initialSpeciationThreshold;
@@ -213,16 +245,16 @@ void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
 struct NEAT_Context
 NEAT_constructPopulation(const struct NEAT_Parameters *parameters);
 
-int64_t NEAT_findNeuron(struct NEAT_Genome *g, uint32_t id);
+int64_t NEAT_findNeuron(const struct NEAT_Genome *g, uint32_t id);
 
-uint32_t NEAT_layerNeuron(struct NEAT_Genome *g, uint32_t neuronIndex,
+uint32_t NEAT_layerNeuron(const struct NEAT_Genome *g, uint32_t neuronIndex,
                           uint32_t runningLayerCount);
 
 void NEAT_layer(struct NEAT_Context *ctx);
 
 void NEAT_cleanup(struct NEAT_Context *ctx);
 
-void NEAT_printNetwork(struct NEAT_Genome *g);
+void NEAT_printNetwork(const struct NEAT_Genome *g);
 
 #ifdef NEAT_H_IMPLEMENTATION
 
@@ -368,20 +400,60 @@ NEAT_constructPopulation(const struct NEAT_Parameters *parameters) {
   struct NEAT_Context ctx = {
     .history = { 0 },
 		.species = { 0 },
+
     .arch = { 
 			.inputs = parameters->inputs + 1, // Extra input for bias
       .outputs = parameters->outputs, 
 		},
+
     .populationSize = parameters->populationSize,
     .population = NULL,
+
 		.allowRecurrent = parameters->allowRecurrent,
+
+		.parentMutationProbability = parameters->parentMutationProbability,
+		.childMutationProbability = parameters->childMutationProbability,
+		.maxMutationsPerGeneration = parameters->maxMutationsPerGeneration,
+
+		.weightNudgeProbability = parameters->weightNudgeProbability,
+		.weightRandomizeProbability = parameters->weightRandomizeProbability,
+		.connectionAddProbability = parameters->connectionAddProbability,
+		.neuronAddProbability = parameters->neuronAddProbability,
+		.connectionDeleteProbability = parameters->connectionDeleteProbability,
+		.neuronDeleteProbability = parameters->neuronDeleteProbability,
+
+		.elitismProportion = parameters->elitismProportion,
+		.asexualProportion = 1.0f - parameters->sexualProportion,
+		.sexualProportion = parameters->sexualProportion,
+		.interspeciesProbability = parameters->interspeciesProbability,
+
     .targetSpecies = parameters->initialSpeciesTarget,
     .speciationThreshold = parameters->initialSpeciationThreshold,
 		.improvementDeadline = parameters->improvementDeadline,
+
 		.prunePhaseThreshold = parameters->prunePhaseThreshold,
 		.pruneProbationTime = parameters->pruneProbationTime,
+
     .currentGeneration = 0,
   };
+
+  assert(ctx.elitismProportion > 0.0f && ctx.elitismProportion < 1.0f);
+  assert(ctx.asexualProportion > 0.0f && ctx.asexualProportion < 1.0f);
+  assert(ctx.sexualProportion > 0.0f && ctx.sexualProportion < 1.0f);
+  assert(ctx.interspeciesProbability > 0.0f &&
+         ctx.interspeciesProbability < 1.0f);
+
+  assert(ctx.parentMutationProbability > 0.0f &&
+         ctx.parentMutationProbability < 1.0f);
+  assert(ctx.childMutationProbability > 0.0f &&
+         ctx.childMutationProbability < 1.0f);
+
+  assert(ctx.weightNudgeProbability > 0.0f);
+  assert(ctx.weightRandomizeProbability > 0.0f);
+  assert(ctx.connectionAddProbability > 0.0f);
+  assert(ctx.neuronAddProbability > 0.0f);
+  assert(ctx.connectionDeleteProbability > 0.0f);
+  assert(ctx.neuronDeleteProbability > 0.0f);
 
   ctx.population = malloc(ctx.populationSize * sizeof(struct NEAT_Genome));
   assert(ctx.population != NULL && "Failed to allocate memory for population");
@@ -413,7 +485,7 @@ void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
                         maxNeuronId + 1, true, ctx);
 }
 
-void NEAT_printNetwork(struct NEAT_Genome *g) {
+void NEAT_printNetwork(const struct NEAT_Genome *g) {
   for (uint32_t i = 0; i < g->neurons.count; i++) {
     const char *kind;
     switch (g->neurons.items[i].kind) {
@@ -461,7 +533,7 @@ void NEAT_printNetwork(struct NEAT_Genome *g) {
   }
 }
 
-int64_t NEAT_findNeuron(struct NEAT_Genome *g, uint32_t id) {
+int64_t NEAT_findNeuron(const struct NEAT_Genome *g, uint32_t id) {
   int64_t index = -1;
   for (uint32_t i = 0; i < g->neurons.count; i++) {
     if (g->neurons.items[i].id == id)
@@ -470,7 +542,7 @@ int64_t NEAT_findNeuron(struct NEAT_Genome *g, uint32_t id) {
   return index;
 }
 
-uint32_t NEAT_layerNeuron(struct NEAT_Genome *g, uint32_t neuronIndex,
+uint32_t NEAT_layerNeuron(const struct NEAT_Genome *g, uint32_t neuronIndex,
                           uint32_t runningLayerCount) {
   if (g->neurons.items[neuronIndex].kind == NEAT_NEURON_KIND_INPUT ||
       g->neurons.items[neuronIndex].kind == NEAT_NEURON_KIND_BIAS) {

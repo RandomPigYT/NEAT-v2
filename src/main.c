@@ -136,7 +136,8 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
   }
 }
 
-void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase) {
+void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
+                 struct NEAT_Context *ctx) {
   // Types of mutations:
   // -> nudging the weight of a connection
   // -> randomizing the wieght of a connection
@@ -148,24 +149,32 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase) {
 
 int main(void) {
   srand(time(NULL));
-  struct NEAT_Context ctx = NEAT_constructPopulation(&(struct NEAT_Parameters){
+
+  struct NEAT_Parameters p = {
     .inputs = 4,
     .outputs = 4,
     .populationSize = 7,
     .allowRecurrent = false,
+    .parentMutationProbability = 0.01f,
+    .childMutationProbability = 0.3f,
+    .maxMutationsPerGeneration = 3,
+    .weightNudgeProbability = 0.3f,
+    .weightRandomizeProbability = 0.3f,
+    .connectionAddProbability = 0.27f,
+    .neuronAddProbability = 1.0f - (0.3f + 0.3f + 0.28f),
+    .connectionDeleteProbability = 0.25f,
+    .neuronDeleteProbability = 1.0f - (0.3f + 0.3f + 0.25f),
+    .elitismProportion = 0.2f,
+    .sexualProportion = 0.5f,
+    .interspeciesProbability = 0.1f,
     .initialSpeciesTarget = 10,
     .initialSpeciationThreshold = 1.5f,
     .improvementDeadline = 15,
-  });
 
-  ctx.currentGeneration++;
-  DA_FREE(&ctx.history);
+  };
 
-  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 3, 0, false,
-                        &ctx);
+  struct NEAT_Context ctx = NEAT_constructPopulation(&p);
 
-  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 3, 1, false,
-                        &ctx);
   NEAT_layer(&ctx);
 
   for (uint32_t i = 0; i < ctx.populationSize; i++) {
@@ -190,11 +199,32 @@ int main(void) {
       uint32_t inps = ((float)rand() / (float)RAND_MAX) * (5 - 1) + 1;
       uint32_t outs = ((float)rand() / (float)RAND_MAX) * (7 - 1) + 1;
 
+      float conNudge = ((float)rand() / (float)RAND_MAX);
+      float conRand = ((float)rand() / (float)RAND_MAX) * (1.0f - conNudge);
+      float conNew =
+        ((float)rand() / (float)RAND_MAX) * (1.0f - (conNudge + conRand));
+
+      float nNew = (1.0f - (conNudge + conRand + conNew));
+
+      //printf("%f\n", conNudge + conRand + conNew + nNew);
+
       ctx = NEAT_constructPopulation(&(struct NEAT_Parameters){
         .inputs = inps,
         .outputs = outs,
         .populationSize = 7,
-        .allowRecurrent = true,
+        .allowRecurrent = false,
+        .parentMutationProbability = 0.01f,
+        .childMutationProbability = 0.3f,
+        .maxMutationsPerGeneration = 3,
+        .weightNudgeProbability = conNudge,
+        .weightRandomizeProbability = conRand,
+        .connectionAddProbability = conNew,
+        .neuronAddProbability = nNew,
+        .connectionDeleteProbability = ctx.connectionAddProbability,
+        .neuronDeleteProbability = ctx.neuronAddProbability,
+        .elitismProportion = 0.2f,
+        .sexualProportion = 0.5f,
+        .interspeciesProbability = 0.1f,
         .initialSpeciesTarget = 10,
         .initialSpeciationThreshold = 1.5f,
         .improvementDeadline = 15,
@@ -202,6 +232,7 @@ int main(void) {
 
       NEAT_layer(&ctx);
       i = 0;
+      t = 0;
     }
     t += GetFrameTime();
 
