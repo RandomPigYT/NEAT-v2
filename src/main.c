@@ -145,6 +145,120 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
   // -> adding a neuron
   // -> removing a connection
   // -> removing a neuron
+
+  float nudgeProb = ctx->weightNudgeProbability;
+  float randProb = ctx->weightRandomizeProbability;
+  float conStructureMod = phase == NEAT_COMPLEXIFY
+                            ? ctx->connectionAddProbability
+                            : ctx->connectionDeleteProbability;
+  float neuronStructureMod = phase == NEAT_COMPLEXIFY
+                               ? ctx->neuronAddProbability
+                               : ctx->neuronDeleteProbability;
+
+  if (g->connections.count == 0) {
+    if (phase == NEAT_PRUNE) {
+      return;
+    }
+
+    conStructureMod = 1.0f;
+
+    neuronStructureMod = 0.0f;
+    randProb = 0.0f;
+    nudgeProb = 0.0f;
+  }
+
+  // Check if there are no hidden neurons during the purning phase
+  if (g->neurons.count == ctx->arch.inputs + ctx->arch.outputs &&
+      phase == NEAT_PRUNE) {
+    nudgeProb += neuronStructureMod / 3;
+    randProb += neuronStructureMod / 3;
+    conStructureMod += neuronStructureMod / 3;
+
+    neuronStructureMod = 0.0f;
+  }
+
+  DA_CREATE(uint32_t) removableNeurons = { 0 };
+
+  // Check if there are no neurons with at least one end that is only connected to one connection
+  if (phase == NEAT_PRUNE) {
+    for (uint32_t i = 0; i < g->neurons.count; i++) {
+      if (g->neurons.items[i].kind != NEAT_NEURON_KIND_HIDDEN) {
+        continue;
+      }
+
+      uint32_t numIncoming = 0;
+      uint32_t numOutgoing = 0;
+
+      uint32_t neuronId = g->neurons.items[i].id;
+      for (uint32_t j = 0; j < g->connections.count; j++) {
+        if (g->connections.items[j].to == neuronId) {
+          numIncoming++;
+        }
+
+        if (g->connections.items[j].from == neuronId) {
+          numOutgoing++;
+        }
+      }
+
+      if (numIncoming == 1 || numOutgoing == 1 || numIncoming == 0 ||
+          numOutgoing == 0) {
+        DA_APPEND(&removableNeurons, i);
+      }
+    }
+
+    if (removableNeurons.count == 0) {
+      nudgeProb += neuronStructureMod / 3;
+      randProb += neuronStructureMod / 3;
+      conStructureMod += neuronStructureMod / 3;
+
+      neuronStructureMod = 0.0f;
+    }
+  }
+
+  float runningSum = 0.0f;
+  float random = (float)rand() / (float)RAND_MAX;
+
+  runningSum += nudgeProb;
+  if (random < runningSum) {
+    assert(g->connections.count > 0);
+
+    uint32_t weightToNudge = rand() % g->connections.count;
+
+    float amount = (((float)rand() / (float)RAND_MAX) *
+                    (NEAT_MAX_CON_GEN_RANGE - NEAT_MIN_CON_GEN_RANGE)) +
+                   NEAT_MIN_CON_GEN_RANGE;
+
+    g->connections.items[weightToNudge].weight += amount;
+
+    goto Exit;
+  }
+
+  runningSum += randProb;
+  if (random < runningSum) {
+    assert(g->connections.count > 0);
+
+    uint32_t weightToRandomize = rand() % g->connections.count;
+
+    float newWeight = (((float)rand() / (float)RAND_MAX) *
+                       (NEAT_MAX_CON_GEN_RANGE - NEAT_MIN_CON_GEN_RANGE)) +
+                      NEAT_MIN_CON_GEN_RANGE;
+
+    g->connections.items[weightToRandomize].weight = newWeight;
+
+    goto Exit;
+  }
+
+  runningSum += conStructureMod;
+
+  /* ... */
+
+  runningSum += neuronStructureMod;
+
+  /* ... */
+
+Exit:
+  DA_FREE(&removableNeurons);
+  return;
 }
 
 int main(void) {
