@@ -122,7 +122,9 @@ struct NEAT_Neuron {
 
 struct NEAT_Genome {
   DA_CREATE(struct NEAT_Connection) connections;
+
   DA_CREATE(struct NEAT_Neuron) neurons;
+  uint32_t nextNeuronId;
 
   uint32_t species;
 
@@ -356,7 +358,9 @@ struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx) {
   struct NEAT_Genome genome = {
     .connections = { 0 },
     .neurons = { 0 },
+    .nextNeuronId = ctx->arch.inputs + ctx->arch.outputs,
     .species = 0,
+    .fitness = 0.0f,
   };
 
   struct NEAT_Neuron biasNeuron = {
@@ -474,19 +478,21 @@ void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
   assert(connection < g->connections.count && "Invalid connection index");
   g->connections.items[connection].enabled = false;
 
-  uint32_t maxNeuronId = 0;
-  for (uint32_t i = 0; i < g->neurons.count; i++) {
-    maxNeuronId = g->neurons.items[i].id > maxNeuronId ? g->neurons.items[i].id
-                                                       : maxNeuronId;
-  }
+  //uint32_t maxNeuronId = 0;
+  //for (uint32_t i = 0; i < g->neurons.count; i++) {
+  //  maxNeuronId = g->neurons.items[i].id > maxNeuronId ? g->neurons.items[i].id
+  //                                                     : maxNeuronId;
+  //}
 
   enum NEAT_ConnectionKind kind = g->connections.items[connection].kind;
 
-  NEAT_createConnection(g, kind, maxNeuronId + 1,
+  NEAT_createConnection(g, kind, g->nextNeuronId,
                         g->connections.items[connection].from, true, ctx);
 
   NEAT_createConnection(g, kind, g->connections.items[connection].to,
-                        maxNeuronId + 1, true, ctx);
+                        g->nextNeuronId, true, ctx);
+
+  g->nextNeuronId++;
 }
 
 void NEAT_printNetwork(const struct NEAT_Genome *g) {

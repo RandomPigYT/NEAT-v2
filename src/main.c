@@ -137,6 +137,25 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
   }
 }
 
+void NEAT_numNeuronConnections(const struct NEAT_Genome *g, uint32_t neuron,
+                               uint32_t *incoming, uint32_t *outgoing) {
+  assert(neuron < g->neurons.count && "Invalid neuron index");
+
+  *incoming = 0;
+  *outgoing = 0;
+
+  uint32_t neuronId = g->neurons.items[neuron].id;
+  for (uint32_t i = 0; i < g->connections.count; i++) {
+    if (g->connections.items[i].to == neuronId) {
+      (*incoming)++;
+    }
+
+    if (g->connections.items[i].from == neuronId) {
+      (*outgoing)++;
+    }
+  }
+}
+
 void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
                  struct NEAT_Context *ctx) {
   // Types of mutations:
@@ -193,16 +212,7 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
       uint32_t numIncoming = 0;
       uint32_t numOutgoing = 0;
 
-      uint32_t neuronId = g->neurons.items[i].id;
-      for (uint32_t j = 0; j < g->connections.count; j++) {
-        if (g->connections.items[j].to == neuronId) {
-          numIncoming++;
-        }
-
-        if (g->connections.items[j].from == neuronId) {
-          numOutgoing++;
-        }
-      }
+      NEAT_numNeuronConnections(g, i, &numIncoming, &numOutgoing);
 
       if (numIncoming == 1 || numOutgoing == 1 || numIncoming == 0 ||
           numOutgoing == 0) {
@@ -310,12 +320,48 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
       uint32_t conToRemove = rand() % g->connections.count;
 
       DA_DELETE_ITEM(&g->connections, conToRemove);
+      goto Exit;
     }
   }
 
   runningSum += neuronStructureModProb;
+  if (random < runningSum) {
+    if (phase == NEAT_COMPLEXIFY) {
+      assert(g->connections.count != 0);
 
-  /* ... */
+      DA_CREATE(uint32_t) enabledCons = { 0 };
+      for (uint32_t i = 0; i < g->connections.count; i++) {
+        if (g->connections.items[i].enabled) {
+          DA_APPEND(&enabledCons, i);
+        }
+      }
+
+      if (enabledCons.count == 0) {
+        DA_FREE(&enabledCons);
+        goto Exit;
+      }
+
+      uint32_t conToSplit = enabledCons.items[rand() % enabledCons.count];
+
+      g->connections.items[conToSplit].enabled = false;
+      enum NEAT_ConnectionKind kind = g->connections.items[conToSplit].kind;
+
+      // Implicitly creates the new node
+      NEAT_createConnection(g, kind, g->nextNeuronId,
+                            g->connections.items[conToSplit].from, true, ctx);
+
+      NEAT_createConnection(g, kind, g->connections.items[conToSplit].to,
+                            g->nextNeuronId, false, ctx);
+
+      g->nextNeuronId++;
+
+      DA_FREE(&enabledCons);
+      goto Exit;
+
+    } else {
+      /* ... */
+    }
+  }
 
 Exit:
   DA_FREE(&removableNeurons);
@@ -354,6 +400,7 @@ int main(void) {
 
   for (uint32_t i = 0; i < ctx.populationSize; i++) {
     NEAT_printNetwork(&ctx.population[i]);
+    printf("Next neuron ID: %d\n", ctx.population[i].nextNeuronId);
   }
 
   uint32_t factor = 120;
@@ -367,8 +414,13 @@ int main(void) {
 
   uint32_t i = 0;
   float t = 0;
+  bool paused = true;
   while (!WindowShouldClose()) {
-    if (GetKeyPressed() == KEY_R) {
+    if (IsKeyPressed(KEY_SPACE)) {
+      paused = !paused;
+    }
+
+    if (IsKeyPressed(KEY_R)) {
       NEAT_cleanup(&ctx);
 
       uint32_t inps = ((float)rand() / (float)RAND_MAX) * (5 - 1) + 1;
@@ -416,15 +468,18 @@ int main(void) {
       i = 0;
       t = 0;
     }
-    t += GetFrameTime();
 
-    if (t >= 0.0f && i < 1000) {
+    if (!paused)
+      t += GetFrameTime();
+
+    if (t >= 0.01f && i < 1000 && !paused) {
       //uint32_t con = rand() % ctx.population[0].connections.count;
       //NEAT_splitConnection(&ctx.population[0], con, &ctx);
       //NEAT_layer(&ctx);
       uint8_t temp = rand() % 2;
       enum NEAT_Phase p = temp ? NEAT_COMPLEXIFY : NEAT_PRUNE;
       NEAT_mutate(&ctx.population[0], p, &ctx);
+      NEAT_layer(&ctx);
       i++;
       t = 0.0f;
     }
