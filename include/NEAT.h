@@ -173,6 +173,7 @@ struct NEAT_Context {
   float childMutationProbability;
   uint32_t maxMutationsPerGeneration;
 
+  float conToggleProbability;
   float weightNudgeProbability;
   float weightRandomizeProbability;
   float connectionAddProbability;
@@ -211,6 +212,7 @@ struct NEAT_Parameters {
   float childMutationProbability;
   uint32_t maxMutationsPerGeneration;
 
+  float conToggleProbability;
   float weightNudgeProbability;
   float weightRandomizeProbability;
   float connectionAddProbability;
@@ -415,6 +417,7 @@ NEAT_constructPopulation(const struct NEAT_Parameters *parameters) {
 		.childMutationProbability = parameters->childMutationProbability,
 		.maxMutationsPerGeneration = parameters->maxMutationsPerGeneration,
 
+		.conToggleProbability = parameters->conToggleProbability,
 		.weightNudgeProbability = parameters->weightNudgeProbability,
 		.weightRandomizeProbability = parameters->weightRandomizeProbability,
 		.connectionAddProbability = parameters->connectionAddProbability,
@@ -427,33 +430,34 @@ NEAT_constructPopulation(const struct NEAT_Parameters *parameters) {
 		.sexualProportion = parameters->sexualProportion,
 		.interspeciesProbability = parameters->interspeciesProbability,
 
-    .targetSpecies = parameters->initialSpeciesTarget,
-    .speciationThreshold = parameters->initialSpeciationThreshold,
+		.targetSpecies = parameters->initialSpeciesTarget,
+		.speciationThreshold = parameters->initialSpeciationThreshold,
 		.improvementDeadline = parameters->improvementDeadline,
 
 		.prunePhaseThreshold = parameters->prunePhaseThreshold,
 		.pruneProbationTime = parameters->pruneProbationTime,
 
-    .currentGeneration = 0,
-  };
+		.currentGeneration = 0,
+};
 
-  assert(ctx.elitismProportion > 0.0f && ctx.elitismProportion < 1.0f);
-  assert(ctx.asexualProportion > 0.0f && ctx.asexualProportion < 1.0f);
-  assert(ctx.sexualProportion > 0.0f && ctx.sexualProportion < 1.0f);
-  assert(ctx.interspeciesProbability > 0.0f &&
-         ctx.interspeciesProbability < 1.0f);
+  assert(ctx.elitismProportion >= 0.0f && ctx.elitismProportion <= 1.0f);
+  assert(ctx.asexualProportion >= 0.0f && ctx.asexualProportion <= 1.0f);
+  assert(ctx.sexualProportion >= 0.0f && ctx.sexualProportion <= 1.0f);
+  assert(ctx.interspeciesProbability >= 0.0f &&
+         ctx.interspeciesProbability <= 1.0f);
 
-  assert(ctx.parentMutationProbability > 0.0f &&
-         ctx.parentMutationProbability < 1.0f);
-  assert(ctx.childMutationProbability > 0.0f &&
-         ctx.childMutationProbability < 1.0f);
+  assert(ctx.parentMutationProbability >= 0.0f &&
+         ctx.parentMutationProbability <= 1.0f);
+  assert(ctx.childMutationProbability >= 0.0f &&
+         ctx.childMutationProbability <= 1.0f);
 
-  assert(ctx.weightNudgeProbability > 0.0f);
-  assert(ctx.weightRandomizeProbability > 0.0f);
-  assert(ctx.connectionAddProbability > 0.0f);
-  assert(ctx.neuronAddProbability > 0.0f);
-  assert(ctx.connectionDeleteProbability > 0.0f);
-  assert(ctx.neuronDeleteProbability > 0.0f);
+  assert(ctx.conToggleProbability >= 0.0f);
+  assert(ctx.weightNudgeProbability >= 0.0f);
+  assert(ctx.weightRandomizeProbability >= 0.0f);
+  assert(ctx.connectionAddProbability >= 0.0f);
+  assert(ctx.neuronAddProbability >= 0.0f);
+  assert(ctx.connectionDeleteProbability >= 0.0f);
+  assert(ctx.neuronDeleteProbability >= 0.0f);
 
   ctx.population = malloc(ctx.populationSize * sizeof(struct NEAT_Genome));
   assert(ctx.population != NULL && "Failed to allocate memory for population");

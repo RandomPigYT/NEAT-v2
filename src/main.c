@@ -91,8 +91,9 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
 
         colour = weight >= 0 ? GREEN : RED;
 
-        uint8_t alpha = fabs(weight) > 1.0f ? 255 : weight * 255;
+        //uint8_t alpha = fabs(weight) > 1.0f ? 255 : weight * 255;
 
+        uint8_t alpha = tanh(fabs(weight)) * 255;
         // colour = ColorAlphaBlend(
         //   colour, CLITERAL(Color){ .a = alpha, .r = 25, .g = 25, .b = 25 },
         //   WHITE);
@@ -146,35 +147,38 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
   // -> removing a connection
   // -> removing a neuron
 
+  float conToggleProb = ctx->conToggleProbability;
   float nudgeProb = ctx->weightNudgeProbability;
   float randProb = ctx->weightRandomizeProbability;
-  float conStructureMod = phase == NEAT_COMPLEXIFY
-                            ? ctx->connectionAddProbability
-                            : ctx->connectionDeleteProbability;
-  float neuronStructureMod = phase == NEAT_COMPLEXIFY
-                               ? ctx->neuronAddProbability
-                               : ctx->neuronDeleteProbability;
+  float conStructureModProb = phase == NEAT_COMPLEXIFY
+                                ? ctx->connectionAddProbability
+                                : ctx->connectionDeleteProbability;
+  float neuronStructureModProb = phase == NEAT_COMPLEXIFY
+                                   ? ctx->neuronAddProbability
+                                   : ctx->neuronDeleteProbability;
 
   if (g->connections.count == 0) {
     if (phase == NEAT_PRUNE) {
       return;
     }
 
-    conStructureMod = 1.0f;
+    conStructureModProb = 1.0f;
 
-    neuronStructureMod = 0.0f;
+    neuronStructureModProb = 0.0f;
     randProb = 0.0f;
     nudgeProb = 0.0f;
+    conToggleProb = 0.0f;
   }
 
   // Check if there are no hidden neurons during the purning phase
   if (g->neurons.count == ctx->arch.inputs + ctx->arch.outputs &&
       phase == NEAT_PRUNE) {
-    nudgeProb += neuronStructureMod / 3;
-    randProb += neuronStructureMod / 3;
-    conStructureMod += neuronStructureMod / 3;
+    nudgeProb += neuronStructureModProb / 4;
+    randProb += neuronStructureModProb / 4;
+    conStructureModProb += neuronStructureModProb / 4;
+    conToggleProb += neuronStructureModProb / 4;
 
-    neuronStructureMod = 0.0f;
+    neuronStructureModProb = 0.0f;
   }
 
   DA_CREATE(uint32_t) removableNeurons = { 0 };
@@ -207,11 +211,12 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
     }
 
     if (removableNeurons.count == 0) {
-      nudgeProb += neuronStructureMod / 3;
-      randProb += neuronStructureMod / 3;
-      conStructureMod += neuronStructureMod / 3;
+      nudgeProb += neuronStructureModProb / 4;
+      randProb += neuronStructureModProb / 4;
+      conStructureModProb += neuronStructureModProb / 4;
+      conToggleProb += neuronStructureModProb / 4;
 
-      neuronStructureMod = 0.0f;
+      neuronStructureModProb = 0.0f;
     }
   }
 
@@ -248,11 +253,67 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
     goto Exit;
   }
 
-  runningSum += conStructureMod;
+  runningSum += conToggleProb;
+  if (random < runningSum) {
+    assert(g->connections.count > 0);
 
-  /* ... */
+    uint32_t weightToToggle = rand() % g->connections.count;
 
-  runningSum += neuronStructureMod;
+    g->connections.items[weightToToggle].enabled =
+      !g->connections.items[weightToToggle].enabled;
+
+    goto Exit;
+  }
+
+  runningSum += conStructureModProb;
+  if (random < runningSum) {
+    if (phase == NEAT_COMPLEXIFY) {
+      uint32_t to = 0;
+      uint32_t from = 0;
+
+      enum NEAT_ConnectionKind kind = NEAT_CON_KIND_NONE;
+
+      if (ctx->allowRecurrent) {
+        to = rand() % g->neurons.count;
+        from = rand() % g->neurons.count;
+
+        kind = g->neurons.items[to].layer > g->neurons.items[from].layer
+                 ? NEAT_CON_KIND_FORWARD
+                 : NEAT_CON_KIND_RECURRENT;
+      }
+
+      else {
+        const int maxIters = 100;
+        int iter = 0;
+
+        kind = NEAT_CON_KIND_FORWARD;
+
+        do {
+          to = rand() % g->neurons.count;
+          from = rand() % g->neurons.count;
+
+        } while (g->neurons.items[to].layer <= g->neurons.items[from].layer &&
+                 iter++ < maxIters);
+
+        if (iter == maxIters) {
+          goto Exit;
+        }
+      }
+
+      NEAT_createConnection(g, kind, to, from, false, ctx);
+
+      goto Exit;
+
+    } else {
+      assert(g->connections.count > 0);
+
+      uint32_t conToRemove = rand() % g->connections.count;
+
+      DA_DELETE_ITEM(&g->connections, conToRemove);
+    }
+  }
+
+  runningSum += neuronStructureModProb;
 
   /* ... */
 
@@ -272,19 +333,19 @@ int main(void) {
     .parentMutationProbability = 0.01f,
     .childMutationProbability = 0.3f,
     .maxMutationsPerGeneration = 3,
-    .weightNudgeProbability = 0.3f,
-    .weightRandomizeProbability = 0.3f,
+    .conToggleProbability = 0.2f,
+    .weightNudgeProbability = 0.2f,
+    .weightRandomizeProbability = 0.2f,
     .connectionAddProbability = 0.27f,
-    .neuronAddProbability = 1.0f - (0.3f + 0.3f + 0.28f),
+    .neuronAddProbability = 1.0f - (0.2f + 0.2f + 0.2f + 0.27f),
     .connectionDeleteProbability = 0.25f,
-    .neuronDeleteProbability = 1.0f - (0.3f + 0.3f + 0.25f),
+    .neuronDeleteProbability = 1.0f - (0.2f + 0.2f + 0.2f + 0.25f),
     .elitismProportion = 0.2f,
     .sexualProportion = 0.5f,
     .interspeciesProbability = 0.1f,
     .initialSpeciesTarget = 10,
     .initialSpeciationThreshold = 1.5f,
     .improvementDeadline = 15,
-
   };
 
   struct NEAT_Context ctx = NEAT_constructPopulation(&p);
@@ -317,25 +378,32 @@ int main(void) {
       float conRand = ((float)rand() / (float)RAND_MAX) * (1.0f - conNudge);
       float conNew =
         ((float)rand() / (float)RAND_MAX) * (1.0f - (conNudge + conRand));
+      float conToggle = ((float)rand() / (float)RAND_MAX) *
+                        (1.0f - (conNudge + conRand + conNew));
 
-      float nNew = (1.0f - (conNudge + conRand + conNew));
+      conToggle = 0.0f;
 
-      //printf("%f\n", conNudge + conRand + conNew + nNew);
+      float nNew = (1.0f - (conNudge + conRand + conNew + conToggle));
+
+      printf("%f\n", conNudge + conRand + conNew + nNew + conToggle);
 
       ctx = NEAT_constructPopulation(&(struct NEAT_Parameters){
         .inputs = inps,
         .outputs = outs,
         .populationSize = 7,
-        .allowRecurrent = false,
+        .allowRecurrent = true,
         .parentMutationProbability = 0.01f,
         .childMutationProbability = 0.3f,
         .maxMutationsPerGeneration = 3,
+
+        .conToggleProbability = conToggle,
         .weightNudgeProbability = conNudge,
         .weightRandomizeProbability = conRand,
         .connectionAddProbability = conNew,
         .neuronAddProbability = nNew,
         .connectionDeleteProbability = ctx.connectionAddProbability,
         .neuronDeleteProbability = ctx.neuronAddProbability,
+
         .elitismProportion = 0.2f,
         .sexualProportion = 0.5f,
         .interspeciesProbability = 0.1f,
@@ -350,10 +418,13 @@ int main(void) {
     }
     t += GetFrameTime();
 
-    if (t >= 1.0f && i < 10) {
-      uint32_t con = rand() % ctx.population[0].connections.count;
-      NEAT_splitConnection(&ctx.population[0], con, &ctx);
-      NEAT_layer(&ctx);
+    if (t >= 0.0f && i < 1000) {
+      //uint32_t con = rand() % ctx.population[0].connections.count;
+      //NEAT_splitConnection(&ctx.population[0], con, &ctx);
+      //NEAT_layer(&ctx);
+      uint8_t temp = rand() % 2;
+      enum NEAT_Phase p = temp ? NEAT_COMPLEXIFY : NEAT_PRUNE;
+      NEAT_mutate(&ctx.population[0], p, &ctx);
       i++;
       t = 0.0f;
     }
