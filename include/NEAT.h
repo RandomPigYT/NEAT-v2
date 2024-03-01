@@ -32,7 +32,7 @@
                                              : 2 * (arr)->capacity;     \
       (arr)->items =                                                    \
         realloc((arr)->items, (arr)->capacity * sizeof(*(arr)->items)); \
-      assert((arr)->items != NULL && " Failed to allocate memory");     \
+      assert((arr)->items != NULL && "Failed to allocate memory");      \
     }                                                                   \
     (arr)->items[(arr)->count++] = (item);                              \
   } while (0)
@@ -53,7 +53,7 @@
       (arr)->count--;                                                         \
     } else {                                                                  \
       memmove(&((arr)->items[index]), &((arr)->items[index + 1]),             \
-              ((arr)->count - index) * sizeof(*(arr)->items));                \
+              ((arr)->count - index - 1) * sizeof(*(arr)->items));            \
       (arr)->count--;                                                         \
     }                                                                         \
   } while (0)
