@@ -192,10 +192,10 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
   // Check if there are no hidden neurons during the purning phase
   if (g->neurons.count == ctx->arch.inputs + ctx->arch.outputs &&
       phase == NEAT_PRUNE) {
-    nudgeProb += neuronStructureModProb / 4;
-    randProb += neuronStructureModProb / 4;
-    conStructureModProb += neuronStructureModProb / 4;
-    conToggleProb += neuronStructureModProb / 4;
+    //nudgeProb += neuronStructureModProb / 4;
+    //randProb += neuronStructureModProb / 4;
+    //conStructureModProb += neuronStructureModProb / 4;
+    //conToggleProb += neuronStructureModProb / 4;
 
     neuronStructureModProb = 0.0f;
   }
@@ -221,10 +221,10 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
     }
 
     if (removableNeurons.count == 0) {
-      nudgeProb += neuronStructureModProb / 4;
-      randProb += neuronStructureModProb / 4;
-      conStructureModProb += neuronStructureModProb / 4;
-      conToggleProb += neuronStructureModProb / 4;
+      //nudgeProb += neuronStructureModProb / 4;
+      //randProb += neuronStructureModProb / 4;
+      //conStructureModProb += neuronStructureModProb / 4;
+      //conToggleProb += neuronStructureModProb / 4;
 
       neuronStructureModProb = 0.0f;
     }
@@ -359,7 +359,144 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
       goto Exit;
 
     } else {
-      /* ... */
+      assert(removableNeurons.count != 0);
+
+      uint32_t neuronToRemove =
+        removableNeurons.items[rand() % removableNeurons.count];
+
+      uint32_t neuronId = g->neurons.items[neuronToRemove].id;
+
+      uint32_t numIncoming, numOutgoing;
+      NEAT_numNeuronConnections(g, neuronToRemove, &numIncoming, &numOutgoing);
+
+      if (numIncoming == 0 || numOutgoing == 0) {
+        DA_CREATE(uint32_t) conIdsToRemove = { 0 }; // Innovations, not indices
+
+        for (uint32_t i = 0; i < g->connections.count; i++) {
+          if (g->connections.items[i].to == neuronId ||
+              g->connections.items[i].from == neuronId) {
+            DA_APPEND(&conIdsToRemove, g->connections.items[i].innovation);
+          }
+        }
+
+        while (conIdsToRemove.count) {
+          for (uint32_t i = 0; i < g->connections.count; i++) {
+            if (g->connections.items[i].innovation ==
+                conIdsToRemove.items[conIdsToRemove.count - 1]) {
+              DA_DELETE_ITEM(&g->connections, i);
+              DA_DELETE_ITEM(&conIdsToRemove, conIdsToRemove.count - 1);
+
+              break;
+            }
+          }
+        }
+
+        DA_FREE(&conIdsToRemove);
+
+      } else if (numIncoming == 1) {
+        DA_CREATE(uint32_t) conIdsToRemove = { 0 }; // Innovations, not indices
+        DA_CREATE(uint32_t) outgoingNeuronIds = { 0 };
+
+        uint32_t incomingNeuronId = 0;
+        for (uint32_t i = 0; i < g->connections.count; i++) {
+          if (g->connections.items[i].to == neuronId) {
+            incomingNeuronId = g->connections.items[i].from;
+            break;
+          }
+        }
+
+        for (uint32_t i = 0; i < g->connections.count; i++) {
+          if (g->connections.items[i].to == neuronId) {
+            DA_APPEND(&conIdsToRemove, g->connections.items[i].innovation);
+
+          } else if (g->connections.items[i].from == neuronId) {
+            DA_APPEND(&conIdsToRemove, g->connections.items[i].innovation);
+            DA_APPEND(&outgoingNeuronIds, g->connections.items[i].to);
+          }
+        }
+
+        while (conIdsToRemove.count) {
+          for (uint32_t i = 0; i < g->connections.count; i++) {
+            if (g->connections.items[i].innovation ==
+                conIdsToRemove.items[conIdsToRemove.count - 1]) {
+              DA_DELETE_ITEM(&g->connections, i);
+              DA_DELETE_ITEM(&conIdsToRemove, conIdsToRemove.count - 1);
+
+              break;
+            }
+          }
+        }
+
+        for (uint32_t i = 0; i < outgoingNeuronIds.count; i++) {
+          uint32_t incoming = NEAT_findNeuron(g, incomingNeuronId);
+          uint32_t outgoing = NEAT_findNeuron(g, outgoingNeuronIds.items[i]);
+
+          enum NEAT_ConnectionKind kind = g->neurons.items[outgoing].layer >
+                                              g->neurons.items[incoming].layer
+                                            ? NEAT_CON_KIND_FORWARD
+                                            : NEAT_CON_KIND_RECURRENT;
+
+          NEAT_createConnection(g, kind, outgoingNeuronIds.items[i],
+                                incomingNeuronId, false, ctx);
+        }
+
+        DA_FREE(&conIdsToRemove);
+        DA_FREE(&outgoingNeuronIds);
+
+      } else if (numOutgoing == 1) {
+        DA_CREATE(uint32_t) conIdsToRemove = { 0 }; // Innovations, not indices
+        DA_CREATE(uint32_t) incomingNeuronIds = { 0 };
+
+        uint32_t outgoingNeuronId = 0;
+        for (uint32_t i = 0; i < g->connections.count; i++) {
+          if (g->connections.items[i].from == neuronId) {
+            outgoingNeuronId = g->connections.items[i].to;
+            break;
+          }
+        }
+
+        for (uint32_t i = 0; i < g->connections.count; i++) {
+          if (g->connections.items[i].from == neuronId) {
+            DA_APPEND(&conIdsToRemove, g->connections.items[i].innovation);
+
+          } else if (g->connections.items[i].to == neuronId) {
+            DA_APPEND(&conIdsToRemove, g->connections.items[i].innovation);
+            DA_APPEND(&incomingNeuronIds, g->connections.items[i].from);
+          }
+        }
+
+        while (conIdsToRemove.count) {
+          for (uint32_t i = 0; i < g->connections.count; i++) {
+            if (g->connections.items[i].innovation ==
+                conIdsToRemove.items[conIdsToRemove.count - 1]) {
+              DA_DELETE_ITEM(&g->connections, i);
+              DA_DELETE_ITEM(&conIdsToRemove, conIdsToRemove.count - 1);
+
+              break;
+            }
+          }
+        }
+
+        for (uint32_t i = 0; i < incomingNeuronIds.count; i++) {
+          uint32_t outgoing = NEAT_findNeuron(g, outgoingNeuronId);
+          uint32_t incoming = NEAT_findNeuron(g, incomingNeuronIds.items[i]);
+
+          enum NEAT_ConnectionKind kind = g->neurons.items[outgoing].layer >
+                                              g->neurons.items[incoming].layer
+                                            ? NEAT_CON_KIND_FORWARD
+                                            : NEAT_CON_KIND_RECURRENT;
+
+          NEAT_createConnection(g, kind, outgoingNeuronId,
+                                incomingNeuronIds.items[i], false, ctx);
+        }
+
+        DA_FREE(&conIdsToRemove);
+        DA_FREE(&incomingNeuronIds);
+      }
+
+      DA_DELETE_ITEM(&g->neurons, neuronToRemove);
+
+      goto Exit;
     }
   }
 
@@ -372,20 +509,20 @@ int main(void) {
   srand(time(NULL));
 
   struct NEAT_Parameters p = {
-    .inputs = 4,
-    .outputs = 4,
+    .inputs = 1,
+    .outputs = 1,
     .populationSize = 7,
     .allowRecurrent = false,
     .parentMutationProbability = 0.01f,
     .childMutationProbability = 0.3f,
     .maxMutationsPerGeneration = 3,
-    .conToggleProbability = 0.2f,
-    .weightNudgeProbability = 0.2f,
-    .weightRandomizeProbability = 0.2f,
-    .connectionAddProbability = 0.27f,
-    .neuronAddProbability = 1.0f - (0.2f + 0.2f + 0.2f + 0.27f),
-    .connectionDeleteProbability = 0.25f,
-    .neuronDeleteProbability = 1.0f - (0.2f + 0.2f + 0.2f + 0.25f),
+    .conToggleProbability = 0.0f,
+    .weightNudgeProbability = 0.0f,
+    .weightRandomizeProbability = 0.0f,
+    .connectionAddProbability = 0.0f,
+    .neuronAddProbability = 1.0f,
+    .connectionDeleteProbability = 0.0f,
+    .neuronDeleteProbability = 0.0f,
     .elitismProportion = 0.2f,
     .sexualProportion = 0.5f,
     .interspeciesProbability = 0.1f,
@@ -396,12 +533,37 @@ int main(void) {
 
   struct NEAT_Context ctx = NEAT_constructPopulation(&p);
 
+  //DA_FREE(&ctx.population[0].connections);
+
+  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 2, 0, false,
+  //                      &ctx);
+
+  //ctx.population[0].connections.items[0].enabled = false;
+
+  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD,
+  //                      ctx.population[0].nextNeuronId - 1, 1, false, &ctx);
+
+  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_RECURRENT,
+  //                      ctx.population[0].nextNeuronId - 1, 2, false, &ctx);
+
+  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 2,
+  //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
+  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 3,
+  //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
+  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 4,
+  //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
+  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 5,
+  //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
+
+  //NEAT_mutate(&ctx.population[0], NEAT_COMPLEXIFY, &ctx);
   NEAT_layer(&ctx);
 
-  for (uint32_t i = 0; i < ctx.populationSize; i++) {
-    NEAT_printNetwork(&ctx.population[i]);
-    printf("Next neuron ID: %d\n", ctx.population[i].nextNeuronId);
-  }
+  NEAT_printNetwork(&ctx.population[0]);
+
+  //for (uint32_t i = 0; i < ctx.populationSize; i++) {
+  //  NEAT_printNetwork(&ctx.population[i]);
+  //  printf("Next neuron ID: %d\n", ctx.population[i].nextNeuronId);
+  //}
 
   uint32_t factor = 120;
   uint32_t width = 16 * factor;
@@ -443,7 +605,7 @@ int main(void) {
         .inputs = inps,
         .outputs = outs,
         .populationSize = 7,
-        .allowRecurrent = true,
+        .allowRecurrent = false,
         .parentMutationProbability = 0.01f,
         .childMutationProbability = 0.3f,
         .maxMutationsPerGeneration = 3,
@@ -453,8 +615,8 @@ int main(void) {
         .weightRandomizeProbability = conRand,
         .connectionAddProbability = conNew,
         .neuronAddProbability = nNew,
-        .connectionDeleteProbability = ctx.connectionAddProbability,
-        .neuronDeleteProbability = ctx.neuronAddProbability,
+        .connectionDeleteProbability = conNew,
+        .neuronDeleteProbability = nNew,
 
         .elitismProportion = 0.2f,
         .sexualProportion = 0.5f,
@@ -472,7 +634,7 @@ int main(void) {
     if (!paused)
       t += GetFrameTime();
 
-    if (t >= 0.01f && i < 1000 && !paused) {
+    if (t >= 0.0f && i < 1000 && !paused) {
       //uint32_t con = rand() % ctx.population[0].connections.count;
       //NEAT_splitConnection(&ctx.population[0], con, &ctx);
       //NEAT_layer(&ctx);
