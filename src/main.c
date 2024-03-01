@@ -21,7 +21,9 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
     }
   }
 
-  uint32_t hpad = w / numLayers;
+  assert(numLayers > 1);
+
+  uint32_t hpad = w / (numLayers - 1);
   for (uint32_t i = 0; i < numLayers; i++) {
     uint32_t vpad = 0;
     DA_CREATE(uint32_t) neuronsInLayer = { 0 };
@@ -650,7 +652,7 @@ int main(void) {
     height = GetRenderHeight();
     ClearBackground(*(Color *)&bgColour);
     BeginDrawing();
-    drawNetwork(&ctx.population[0], 0.1f * width, 0.05f * height, 0.9f * width,
+    drawNetwork(&ctx.population[0], 0.05f * width, 0.05f * height, 0.9f * width,
                 0.9f * height);
 
     EndDrawing();
