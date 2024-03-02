@@ -170,6 +170,7 @@ struct NEAT_Context {
   struct NEAT_Genome *population;
 
   bool allowRecurrent;
+  float recurrentProbability;
 
   float parentMutationProbability;
   float childMutationProbability;
@@ -209,6 +210,7 @@ struct NEAT_Parameters {
   uint32_t populationSize;
 
   bool allowRecurrent;
+  float recurrentProbability;
 
   float parentMutationProbability;
   float childMutationProbability;
@@ -416,6 +418,7 @@ NEAT_constructPopulation(const struct NEAT_Parameters *parameters) {
     .population = NULL,
 
 		.allowRecurrent = parameters->allowRecurrent,
+		.recurrentProbability = parameters->recurrentProbability,
 
 		.parentMutationProbability = parameters->parentMutationProbability,
 		.childMutationProbability = parameters->childMutationProbability,
@@ -573,7 +576,7 @@ uint32_t NEAT_layerNeuron(const struct NEAT_Genome *g, uint32_t neuronIndex,
     if (runningLayerCount == 0)
       return 1;
 
-    return runningLayerCount;
+    return runningLayerCount + 1;
   }
 
   uint32_t maxLayer = 0;

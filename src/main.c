@@ -438,6 +438,8 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
                                             ? NEAT_CON_KIND_FORWARD
                                             : NEAT_CON_KIND_RECURRENT;
 
+          assert(kind != NEAT_CON_KIND_RECURRENT);
+
           NEAT_createConnection(g, kind, outgoingNeuronIds.items[i],
                                 incomingNeuronId, false, ctx);
         }
@@ -487,6 +489,7 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
                                               g->neurons.items[incoming].layer
                                             ? NEAT_CON_KIND_FORWARD
                                             : NEAT_CON_KIND_RECURRENT;
+          assert(kind != NEAT_CON_KIND_RECURRENT);
 
           NEAT_createConnection(g, kind, outgoingNeuronId,
                                 incomingNeuronIds.items[i], false, ctx);
@@ -508,7 +511,7 @@ Exit:
 }
 
 int main(void) {
-  srand(time(NULL));
+  srand(69);
 
   struct NEAT_Parameters p = {
     .inputs = 1,
@@ -521,10 +524,10 @@ int main(void) {
     .conToggleProbability = 0.0f,
     .weightNudgeProbability = 0.0f,
     .weightRandomizeProbability = 0.0f,
-    .connectionAddProbability = 0.0f,
-    .neuronAddProbability = 1.0f,
-    .connectionDeleteProbability = 0.0f,
-    .neuronDeleteProbability = 0.0f,
+    .connectionAddProbability = 0.5f,
+    .neuronAddProbability = 0.5f,
+    .connectionDeleteProbability = 0.5f,
+    .neuronDeleteProbability = 0.5f,
     .elitismProportion = 0.2f,
     .sexualProportion = 0.5f,
     .interspeciesProbability = 0.1f,
@@ -640,6 +643,9 @@ int main(void) {
       //uint32_t con = rand() % ctx.population[0].connections.count;
       //NEAT_splitConnection(&ctx.population[0], con, &ctx);
       //NEAT_layer(&ctx);
+
+      printf("%d\n", i);
+
       uint8_t temp = rand() % 2;
       enum NEAT_Phase p = temp ? NEAT_COMPLEXIFY : NEAT_PRUNE;
       NEAT_mutate(&ctx.population[0], p, &ctx);
