@@ -243,7 +243,7 @@ struct NEAT_Parameters {
 bool NEAT_createConnection(struct NEAT_Genome *genome,
                            enum NEAT_ConnectionKind kind, uint32_t to,
                            uint32_t from, bool createMissingNeurons,
-                           struct NEAT_Context *ctx);
+                           bool enabled, struct NEAT_Context *ctx);
 
 struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx);
 
@@ -270,7 +270,7 @@ void NEAT_printNetwork(const struct NEAT_Genome *g);
 bool NEAT_createConnection(struct NEAT_Genome *genome,
                            enum NEAT_ConnectionKind kind, uint32_t to,
                            uint32_t from, bool createMissingNeurons,
-                           struct NEAT_Context *ctx) {
+                           bool enabled, struct NEAT_Context *ctx) {
   // Check if the connection is possible
   bool fromExists = false;
   bool toExists = false;
@@ -350,7 +350,7 @@ bool NEAT_createConnection(struct NEAT_Genome *genome,
     .weight = weight,
     .kind = kind,
     .innovation = innovation,
-    .enabled = true,
+    .enabled = enabled,
   };
 
   DA_APPEND(&genome->connections, newConnection);
@@ -398,7 +398,8 @@ struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx) {
   for (uint32_t j = 0; j < ctx->arch.inputs; j++) {
     for (uint32_t k = ctx->arch.inputs;
          k < ctx->arch.inputs + ctx->arch.outputs; k++) {
-      NEAT_createConnection(&genome, NEAT_CON_KIND_FORWARD, k, j, false, ctx);
+      NEAT_createConnection(&genome, NEAT_CON_KIND_FORWARD, k, j, false, true,
+                            ctx);
     }
   }
 
@@ -492,10 +493,10 @@ void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
   enum NEAT_ConnectionKind kind = g->connections.items[connection].kind;
 
   NEAT_createConnection(g, kind, g->nextNeuronId,
-                        g->connections.items[connection].from, true, ctx);
+                        g->connections.items[connection].from, true, true, ctx);
 
   NEAT_createConnection(g, kind, g->connections.items[connection].to,
-                        g->nextNeuronId, true, ctx);
+                        g->nextNeuronId, true, true, ctx);
 
   g->nextNeuronId++;
 }

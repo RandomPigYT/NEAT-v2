@@ -340,10 +340,11 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
         }
 
         NEAT_createConnection(g, NEAT_CON_KIND_RECURRENT, toId, fromId, false,
-                              ctx);
+                              true, ctx);
 
       } else {
         bool inverseExists;
+        bool neuronsInterrelated;
 
         uint32_t to, from;
 
@@ -362,7 +363,10 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
             }
           }
 
-        } while ((to == from || inverseExists ||
+          neuronsInterrelated = false;
+          // TODO: Check if neurons are indirectly connected
+
+        } while ((to == from || inverseExists || neuronsInterrelated ||
                   g->neurons.items[to].kind == NEAT_NEURON_KIND_INPUT ||
                   g->neurons.items[to].kind == NEAT_NEURON_KIND_BIAS ||
                   g->neurons.items[from].kind == NEAT_NEURON_KIND_OUTPUT) &&
@@ -373,7 +377,7 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
         }
 
         NEAT_createConnection(g, NEAT_CON_KIND_FORWARD, g->neurons.items[to].id,
-                              g->neurons.items[from].id, false, ctx);
+                              g->neurons.items[from].id, false, true, ctx);
       }
 
       goto Exit;
@@ -412,10 +416,11 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
 
       // Implicitly creates the new node
       NEAT_createConnection(g, kind, g->nextNeuronId,
-                            g->connections.items[conToSplit].from, true, ctx);
+                            g->connections.items[conToSplit].from, true, true,
+                            ctx);
 
       NEAT_createConnection(g, kind, g->connections.items[conToSplit].to,
-                            g->nextNeuronId, false, ctx);
+                            g->nextNeuronId, false, true, ctx);
 
       g->nextNeuronId++;
 
@@ -469,6 +474,9 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
           }
         }
 
+        // Connections that originate from the target neuron
+        DA_CREATE(uint32_t) outgoingCons = { 0 };
+
         for (uint32_t i = 0; i < g->connections.count; i++) {
           if (g->connections.items[i].to == neuronId) {
             DA_APPEND(&conIdsToRemove, g->connections.items[i].innovation);
@@ -476,7 +484,22 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
           } else if (g->connections.items[i].from == neuronId) {
             DA_APPEND(&conIdsToRemove, g->connections.items[i].innovation);
             DA_APPEND(&outgoingNeuronIds, g->connections.items[i].to);
+            DA_APPEND(&outgoingCons, i);
           }
+        }
+
+        for (uint32_t i = 0; i < outgoingNeuronIds.count; i++) {
+          enum NEAT_ConnectionKind kind =
+            g->connections.items[outgoingCons.items[i]].kind;
+
+          if (kind == NEAT_CON_KIND_FORWARD &&
+              incomingNeuronId == outgoingNeuronIds.items[i]) {
+            continue;
+          }
+
+          NEAT_createConnection(
+            g, kind, outgoingNeuronIds.items[i], incomingNeuronId, false,
+            g->connections.items[outgoingCons.items[i]].enabled, ctx);
         }
 
         while (conIdsToRemove.count) {
@@ -491,21 +514,7 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
           }
         }
 
-        for (uint32_t i = 0; i < outgoingNeuronIds.count; i++) {
-          uint32_t incoming = NEAT_findNeuron(g, incomingNeuronId);
-          uint32_t outgoing = NEAT_findNeuron(g, outgoingNeuronIds.items[i]);
-
-          enum NEAT_ConnectionKind kind = g->neurons.items[outgoing].layer >
-                                              g->neurons.items[incoming].layer
-                                            ? NEAT_CON_KIND_FORWARD
-                                            : NEAT_CON_KIND_RECURRENT;
-
-          assert(kind != NEAT_CON_KIND_RECURRENT);
-
-          NEAT_createConnection(g, kind, outgoingNeuronIds.items[i],
-                                incomingNeuronId, false, ctx);
-        }
-
+        DA_FREE(&outgoingCons);
         DA_FREE(&conIdsToRemove);
         DA_FREE(&outgoingNeuronIds);
 
@@ -521,6 +530,9 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
           }
         }
 
+        // Connections that originate from the target neuron
+        DA_CREATE(uint32_t) incomingCons = { 0 };
+
         for (uint32_t i = 0; i < g->connections.count; i++) {
           if (g->connections.items[i].from == neuronId) {
             DA_APPEND(&conIdsToRemove, g->connections.items[i].innovation);
@@ -528,7 +540,22 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
           } else if (g->connections.items[i].to == neuronId) {
             DA_APPEND(&conIdsToRemove, g->connections.items[i].innovation);
             DA_APPEND(&incomingNeuronIds, g->connections.items[i].from);
+            DA_APPEND(&incomingCons, i);
           }
+        }
+
+        for (uint32_t i = 0; i < incomingNeuronIds.count; i++) {
+          enum NEAT_ConnectionKind kind =
+            g->connections.items[incomingCons.items[i]].kind;
+
+          if (kind == NEAT_CON_KIND_FORWARD &&
+              outgoingNeuronId == incomingNeuronIds.items[i]) {
+            continue;
+          }
+
+          NEAT_createConnection(
+            g, kind, outgoingNeuronId, incomingNeuronIds.items[i], false,
+            g->connections.items[incomingCons.items[i]].enabled, ctx);
         }
 
         while (conIdsToRemove.count) {
@@ -543,20 +570,7 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
           }
         }
 
-        for (uint32_t i = 0; i < incomingNeuronIds.count; i++) {
-          uint32_t outgoing = NEAT_findNeuron(g, outgoingNeuronId);
-          uint32_t incoming = NEAT_findNeuron(g, incomingNeuronIds.items[i]);
-
-          enum NEAT_ConnectionKind kind = g->neurons.items[outgoing].layer >
-                                              g->neurons.items[incoming].layer
-                                            ? NEAT_CON_KIND_FORWARD
-                                            : NEAT_CON_KIND_RECURRENT;
-          assert(kind != NEAT_CON_KIND_RECURRENT);
-
-          NEAT_createConnection(g, kind, outgoingNeuronId,
-                                incomingNeuronIds.items[i], false, ctx);
-        }
-
+        DA_FREE(&incomingCons);
         DA_FREE(&conIdsToRemove);
         DA_FREE(&incomingNeuronIds);
       }
@@ -573,7 +587,8 @@ Exit:
 }
 
 int main(void) {
-  srand(time(NULL));
+  //srand(time(NULL));
+  srand(69420);
 
   struct NEAT_Parameters p = {
     .inputs = 1,
@@ -587,13 +602,14 @@ int main(void) {
     .childMutationProbability = 0.3f,
     .maxMutationsPerGeneration = 3,
 
-    .conToggleProbability = 0.0f,
-    .weightNudgeProbability = 0.0f,
-    .weightRandomizeProbability = 0.0f,
-    .connectionAddProbability = 0.5f,
-    .neuronAddProbability = 0.5f,
-    .connectionDeleteProbability = 1.0f,
-    .neuronDeleteProbability = 0.0f,
+    .conToggleProbability = 0.2f,
+    .weightNudgeProbability = 0.2f,
+    .weightRandomizeProbability = 0.2f,
+
+    .connectionAddProbability = 0.2f,
+    .neuronAddProbability = 0.2f,
+    .connectionDeleteProbability = 0.2f,
+    .neuronDeleteProbability = 0.2f,
 
     .elitismProportion = 0.2f,
     .sexualProportion = 0.5f,
@@ -712,13 +728,13 @@ int main(void) {
       //NEAT_splitConnection(&ctx.population[0], con, &ctx);
       //NEAT_layer(&ctx);
 
-      //printf("%d\n", i);
+      DA_FREE(&ctx.history);
+      printf("%d\n", i);
 
       uint8_t temp = rand() % 2;
       enum NEAT_Phase p = temp ? NEAT_COMPLEXIFY : NEAT_PRUNE;
       NEAT_mutate(&ctx.population[0], p, &ctx);
       NEAT_layer(&ctx);
-      DA_FREE(&ctx.history);
       i++;
       t = 0.0f;
     }
