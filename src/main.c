@@ -104,6 +104,11 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
           colour, CLITERAL(Color){ .a = alpha, .r = 35, .g = 35, .b = 35 },
           WHITE);
 
+        if (g->connections.items[connections.items[k]].kind ==
+            NEAT_CON_KIND_RECURRENT) {
+          colour = PURPLE;
+        }
+
         DrawLineEx(CLITERAL(Vector2){ cx1, cy1 }, CLITERAL(Vector2){ cx2, cy2 },
                    thickness, colour);
 
@@ -280,6 +285,7 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
   runningSum += conStructureModProb;
   if (random < runningSum) {
     if (phase == NEAT_COMPLEXIFY) {
+#if 0
       uint32_t to = 0;
       uint32_t from = 0;
 
@@ -313,6 +319,62 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
       }
 
       NEAT_createConnection(g, kind, to, from, false, ctx);
+#endif
+
+      bool isRecurrent = false;
+      if (ctx->allowRecurrent) {
+        float random = (float)rand() / (float)RAND_MAX;
+        isRecurrent = random < ctx->recurrentProbability;
+      }
+
+      if (isRecurrent) {
+        uint32_t n1 = rand() % g->neurons.count;
+        uint32_t n2 = rand() % g->neurons.count;
+
+        uint32_t fromId = g->neurons.items[n1].id;
+        uint32_t toId = g->neurons.items[n2].id;
+        if (g->neurons.items[n2].layer > g->neurons.items[n1].layer) {
+          uint32_t temp = fromId;
+          fromId = toId;
+          toId = temp;
+        }
+
+        NEAT_createConnection(g, NEAT_CON_KIND_RECURRENT, toId, fromId, false,
+                              ctx);
+
+      } else {
+        bool inverseExists;
+
+        uint32_t to, from;
+
+        uint32_t iter = 0;
+        do {
+          to = rand() % g->neurons.count;
+          from = rand() % g->neurons.count;
+
+          inverseExists = false;
+          for (uint32_t i = 0; i < g->connections.count; i++) {
+            if (g->connections.items[i].kind == NEAT_CON_KIND_FORWARD &&
+                g->connections.items[i].to == g->neurons.items[from].id &&
+                g->connections.items[i].from == g->neurons.items[to].id) {
+              inverseExists = true;
+              break;
+            }
+          }
+
+        } while ((to == from || inverseExists ||
+                  g->neurons.items[to].kind == NEAT_NEURON_KIND_INPUT ||
+                  g->neurons.items[to].kind == NEAT_NEURON_KIND_BIAS ||
+                  g->neurons.items[from].kind == NEAT_NEURON_KIND_OUTPUT) &&
+                 iter++ < NEAT_MAX_ITERS);
+
+        if (iter == NEAT_MAX_ITERS) {
+          goto Exit;
+        }
+
+        NEAT_createConnection(g, NEAT_CON_KIND_FORWARD, g->neurons.items[to].id,
+                              g->neurons.items[from].id, false, ctx);
+      }
 
       goto Exit;
 
@@ -511,26 +573,32 @@ Exit:
 }
 
 int main(void) {
-  srand(69);
+  srand(time(NULL));
 
   struct NEAT_Parameters p = {
     .inputs = 1,
     .outputs = 1,
     .populationSize = 7,
-    .allowRecurrent = false,
+
+    .allowRecurrent = true,
+    .recurrentProbability = 0.5f,
+
     .parentMutationProbability = 0.01f,
     .childMutationProbability = 0.3f,
     .maxMutationsPerGeneration = 3,
+
     .conToggleProbability = 0.0f,
     .weightNudgeProbability = 0.0f,
     .weightRandomizeProbability = 0.0f,
     .connectionAddProbability = 0.5f,
     .neuronAddProbability = 0.5f,
-    .connectionDeleteProbability = 0.5f,
-    .neuronDeleteProbability = 0.5f,
+    .connectionDeleteProbability = 1.0f,
+    .neuronDeleteProbability = 0.0f,
+
     .elitismProportion = 0.2f,
     .sexualProportion = 0.5f,
     .interspeciesProbability = 0.1f,
+
     .initialSpeciesTarget = 10,
     .initialSpeciationThreshold = 1.5f,
     .improvementDeadline = 15,
@@ -538,7 +606,7 @@ int main(void) {
 
   struct NEAT_Context ctx = NEAT_constructPopulation(&p);
 
-  //DA_FREE(&ctx.population[0].connections);
+  DA_FREE(&ctx.population[0].connections);
 
   //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 2, 0, false,
   //                      &ctx);
@@ -644,12 +712,13 @@ int main(void) {
       //NEAT_splitConnection(&ctx.population[0], con, &ctx);
       //NEAT_layer(&ctx);
 
-      printf("%d\n", i);
+      //printf("%d\n", i);
 
       uint8_t temp = rand() % 2;
       enum NEAT_Phase p = temp ? NEAT_COMPLEXIFY : NEAT_PRUNE;
       NEAT_mutate(&ctx.population[0], p, &ctx);
       NEAT_layer(&ctx);
+      DA_FREE(&ctx.history);
       i++;
       t = 0.0f;
     }

@@ -14,6 +14,8 @@
 
 #define NEAT_EPSILON 1e-6f
 
+#define NEAT_MAX_ITERS 100
+
 #define TO_STR__(x) #x
 #define TO_STR(x) TO_STR__(x)
 
