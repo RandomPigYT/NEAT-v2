@@ -343,7 +343,6 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
                               true, ctx);
 
       } else {
-        bool inverseExists;
         bool neuronsInterrelated;
 
         uint32_t to, from;
@@ -353,20 +352,57 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
           to = rand() % g->neurons.count;
           from = rand() % g->neurons.count;
 
-          inverseExists = false;
-          for (uint32_t i = 0; i < g->connections.count; i++) {
-            if (g->connections.items[i].kind == NEAT_CON_KIND_FORWARD &&
-                g->connections.items[i].to == g->neurons.items[from].id &&
-                g->connections.items[i].from == g->neurons.items[to].id) {
-              inverseExists = true;
+          //inverseExists = false;
+          //for (uint32_t i = 0; i < g->connections.count; i++) {
+          //  if (g->connections.items[i].kind == NEAT_CON_KIND_FORWARD &&
+          //      g->connections.items[i].to == g->neurons.items[from].id &&
+          //      g->connections.items[i].from == g->neurons.items[to].id) {
+          //    inverseExists = true;
+          //    break;
+          //  }
+          //}
+
+          neuronsInterrelated = false;
+
+          DA_CREATE(uint32_t) neuronQueue = { 0 };
+          DA_APPEND(&neuronQueue, from);
+
+          DA_CREATE(uint32_t) checkedNeurons = { 0 };
+          while (neuronQueue.count) {
+            uint32_t n = neuronQueue.items[0];
+            DA_DELETE_ITEM(&neuronQueue, 0);
+
+            DA_APPEND(&checkedNeurons, n);
+
+            if (n == to) {
+              neuronsInterrelated = true;
               break;
+            }
+
+            for (uint32_t i = 0; i < g->connections.count; i++) {
+              if (g->connections.items[i].kind == NEAT_CON_KIND_FORWARD &&
+                  g->connections.items[i].to == g->neurons.items[n].id) {
+                uint32_t temp =
+                  NEAT_findNeuron(g, g->connections.items[i].from);
+
+                bool notChecked = true;
+                for (uint32_t j = 0; j < checkedNeurons.count; j++) {
+                  if (checkedNeurons.items[j] == temp) {
+                    notChecked = false;
+                    break;
+                  }
+                }
+
+                if (notChecked)
+                  DA_APPEND(&neuronQueue, temp);
+              }
             }
           }
 
-          neuronsInterrelated = false;
-          // TODO: Check if neurons are indirectly connected
+          DA_FREE(&neuronQueue);
+          DA_FREE(&checkedNeurons);
 
-        } while ((to == from || inverseExists || neuronsInterrelated ||
+        } while ((to == from || neuronsInterrelated ||
                   g->neurons.items[to].kind == NEAT_NEURON_KIND_INPUT ||
                   g->neurons.items[to].kind == NEAT_NEURON_KIND_BIAS ||
                   g->neurons.items[from].kind == NEAT_NEURON_KIND_OUTPUT) &&
@@ -688,13 +724,17 @@ int main(void) {
 
       float nNew = (1.0f - (conNudge + conRand + conNew + conToggle));
 
-      printf("%f\n", conNudge + conRand + conNew + nNew + conToggle);
+      //printf("%f\n", conNudge + conRand + conNew + nNew + conToggle);
+      float recProb = (float)rand() / (float)RAND_MAX;
 
       ctx = NEAT_constructPopulation(&(struct NEAT_Parameters){
         .inputs = inps,
         .outputs = outs,
         .populationSize = 7,
-        .allowRecurrent = false,
+
+        .allowRecurrent = true,
+        .recurrentProbability = recProb,
+
         .parentMutationProbability = 0.01f,
         .childMutationProbability = 0.3f,
         .maxMutationsPerGeneration = 3,
@@ -723,7 +763,7 @@ int main(void) {
     if (!paused)
       t += GetFrameTime();
 
-    if (t >= 0.0f && i < 1000 && !paused) {
+    if (t >= 0.0f /* && i < 1000 */ && !paused) {
       //uint32_t con = rand() % ctx.population[0].connections.count;
       //NEAT_splitConnection(&ctx.population[0], con, &ctx);
       //NEAT_layer(&ctx);
