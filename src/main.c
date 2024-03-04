@@ -144,6 +144,49 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
   }
 }
 
+bool NEAT_neuronsInterrelated(struct NEAT_Genome *g, uint32_t from,
+                              uint32_t to) {
+  bool neuronsInterrelated = false;
+  DA_CREATE(uint32_t) neuronQueue = { 0 };
+  DA_APPEND(&neuronQueue, from);
+
+  DA_CREATE(uint32_t) checkedNeurons = { 0 };
+  while (neuronQueue.count) {
+    uint32_t n = neuronQueue.items[0];
+    DA_DELETE_ITEM(&neuronQueue, 0);
+
+    DA_APPEND(&checkedNeurons, n);
+
+    if (n == to) {
+      neuronsInterrelated = true;
+      break;
+    }
+
+    for (uint32_t i = 0; i < g->connections.count; i++) {
+      if (g->connections.items[i].kind == NEAT_CON_KIND_FORWARD &&
+          g->connections.items[i].to == g->neurons.items[n].id) {
+        uint32_t temp = NEAT_findNeuron(g, g->connections.items[i].from);
+
+        bool notChecked = true;
+        for (uint32_t j = 0; j < checkedNeurons.count; j++) {
+          if (checkedNeurons.items[j] == temp) {
+            notChecked = false;
+            break;
+          }
+        }
+
+        if (notChecked)
+          DA_APPEND(&neuronQueue, temp);
+      }
+    }
+  }
+
+  DA_FREE(&neuronQueue);
+  DA_FREE(&checkedNeurons);
+
+  return neuronsInterrelated;
+}
+
 void NEAT_numNeuronConnections(const struct NEAT_Genome *g, uint32_t neuron,
                                uint32_t *incoming, uint32_t *outgoing) {
   assert(neuron < g->neurons.count && "Invalid neuron index");
@@ -362,45 +405,45 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
           //  }
           //}
 
-          neuronsInterrelated = false;
+          neuronsInterrelated = NEAT_neuronsInterrelated(g, from, to);
 
-          DA_CREATE(uint32_t) neuronQueue = { 0 };
-          DA_APPEND(&neuronQueue, from);
+          //DA_CREATE(uint32_t) neuronQueue = { 0 };
+          //DA_APPEND(&neuronQueue, from);
 
-          DA_CREATE(uint32_t) checkedNeurons = { 0 };
-          while (neuronQueue.count) {
-            uint32_t n = neuronQueue.items[0];
-            DA_DELETE_ITEM(&neuronQueue, 0);
+          //DA_CREATE(uint32_t) checkedNeurons = { 0 };
+          //while (neuronQueue.count) {
+          //  uint32_t n = neuronQueue.items[0];
+          //  DA_DELETE_ITEM(&neuronQueue, 0);
 
-            DA_APPEND(&checkedNeurons, n);
+          //  DA_APPEND(&checkedNeurons, n);
 
-            if (n == to) {
-              neuronsInterrelated = true;
-              break;
-            }
+          //  if (n == to) {
+          //    neuronsInterrelated = true;
+          //    break;
+          //  }
 
-            for (uint32_t i = 0; i < g->connections.count; i++) {
-              if (g->connections.items[i].kind == NEAT_CON_KIND_FORWARD &&
-                  g->connections.items[i].to == g->neurons.items[n].id) {
-                uint32_t temp =
-                  NEAT_findNeuron(g, g->connections.items[i].from);
+          //  for (uint32_t i = 0; i < g->connections.count; i++) {
+          //    if (g->connections.items[i].kind == NEAT_CON_KIND_FORWARD &&
+          //        g->connections.items[i].to == g->neurons.items[n].id) {
+          //      uint32_t temp =
+          //        NEAT_findNeuron(g, g->connections.items[i].from);
 
-                bool notChecked = true;
-                for (uint32_t j = 0; j < checkedNeurons.count; j++) {
-                  if (checkedNeurons.items[j] == temp) {
-                    notChecked = false;
-                    break;
-                  }
-                }
+          //      bool notChecked = true;
+          //      for (uint32_t j = 0; j < checkedNeurons.count; j++) {
+          //        if (checkedNeurons.items[j] == temp) {
+          //          notChecked = false;
+          //          break;
+          //        }
+          //      }
 
-                if (notChecked)
-                  DA_APPEND(&neuronQueue, temp);
-              }
-            }
-          }
+          //      if (notChecked)
+          //        DA_APPEND(&neuronQueue, temp);
+          //    }
+          //  }
+          //}
 
-          DA_FREE(&neuronQueue);
-          DA_FREE(&checkedNeurons);
+          //DA_FREE(&neuronQueue);
+          //DA_FREE(&checkedNeurons);
 
         } while ((to == from || neuronsInterrelated ||
                   g->neurons.items[to].kind == NEAT_NEURON_KIND_INPUT ||
@@ -533,6 +576,14 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
             continue;
           }
 
+          uint32_t incomingNeuron = NEAT_findNeuron(g, incomingNeuronId);
+          uint32_t outgoingNeuron =
+            NEAT_findNeuron(g, outgoingNeuronIds.items[i]);
+          if (kind == NEAT_CON_KIND_FORWARD &&
+              NEAT_neuronsInterrelated(g, incomingNeuron, outgoingNeuron)) {
+            continue;
+          }
+
           NEAT_createConnection(
             g, kind, outgoingNeuronIds.items[i], incomingNeuronId, false,
             g->connections.items[outgoingCons.items[i]].enabled, ctx);
@@ -586,6 +637,14 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
 
           if (kind == NEAT_CON_KIND_FORWARD &&
               outgoingNeuronId == incomingNeuronIds.items[i]) {
+            continue;
+          }
+
+          uint32_t incomingNeuron =
+            NEAT_findNeuron(g, incomingNeuronIds.items[i]);
+          uint32_t outgoingNeuron = NEAT_findNeuron(g, outgoingNeuronId);
+          if (kind == NEAT_CON_KIND_FORWARD &&
+              NEAT_neuronsInterrelated(g, incomingNeuron, outgoingNeuron)) {
             continue;
           }
 
@@ -769,7 +828,7 @@ int main(void) {
       //NEAT_layer(&ctx);
 
       DA_FREE(&ctx.history);
-      printf("%d\n", i);
+      //printf("%d\n", i);
 
       uint8_t temp = rand() % 2;
       enum NEAT_Phase p = temp ? NEAT_COMPLEXIFY : NEAT_PRUNE;
