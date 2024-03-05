@@ -148,6 +148,8 @@ struct NEAT_ConnectionRecord {
   uint32_t to;
   uint32_t from;
 
+  enum NEAT_ConnectionKind kind;
+
   //uint64_t generation;
 
   uint64_t innovation;
@@ -325,7 +327,7 @@ bool NEAT_createConnection(struct NEAT_Genome *genome,
 
   for (uint64_t i = 0; i < ctx->history.count; i++) {
     struct NEAT_ConnectionRecord temp = ctx->history.items[i];
-    if (temp.from == from && temp.to == to) {
+    if (temp.kind == kind && temp.from == from && temp.to == to) {
       isNovelConnection = false;
       innovation = temp.innovation;
     }
@@ -335,6 +337,7 @@ bool NEAT_createConnection(struct NEAT_Genome *genome,
     struct NEAT_ConnectionRecord temp = {
       .from = from,
       .to = to,
+      .kind = kind,
       .innovation = ctx->globalInnovation++,
     };
 

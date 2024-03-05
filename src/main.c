@@ -111,10 +111,55 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
           colour = ColorAlphaBlend(
             colour, CLITERAL(Color){ .a = alpha, .r = 35, .g = 35, .b = 35 },
             WHITE);
-        }
 
-        DrawLineEx(CLITERAL(Vector2){ cx1, cy1 }, CLITERAL(Vector2){ cx2, cy2 },
-                   thickness, colour);
+          if (g->neurons.items[toNeurons.items[k]].layer == i) {
+            if (toNeurons.items[k] == neuronsInLayer.items[j]) {
+              Vector2 ringCentre = {
+                .x = cx1,
+                .y = cy1 - 2 * radius,
+              };
+
+              float outRad = radius * 2;
+              float inRad = outRad - thickness;
+
+              DrawRing(ringCentre, inRad, outRad, 0.0f, 360.0f, 100, colour);
+
+            } else {
+              DrawSplineBezierQuadratic(
+                (Vector2[]){
+                  CLITERAL(Vector2){
+                    cx1 + (g->neurons.items[toNeurons.items[k]].kind ==
+                               NEAT_NEURON_KIND_OUTPUT
+                             ? -1
+                             : 1) *
+                            radius,
+                    cy1 },
+                  CLITERAL(Vector2){
+                    cx1 + (g->neurons.items[toNeurons.items[k]].kind ==
+                               NEAT_NEURON_KIND_OUTPUT
+                             ? -1
+                             : 1) *
+                            (w * 0.05),
+                    (cy1 + cy2) / 2.0f },
+                  CLITERAL(Vector2){
+                    cx2 + (g->neurons.items[toNeurons.items[k]].kind ==
+                               NEAT_NEURON_KIND_OUTPUT
+                             ? -1
+                             : 1) *
+                            radius,
+                    cy2 },
+                },
+                3, thickness, colour);
+            }
+          } else {
+            DrawLineBezier(CLITERAL(Vector2){ cx1, cy1 },
+                           CLITERAL(Vector2){ cx2, cy2 }, thickness, colour);
+          }
+
+        } else {
+          DrawLineEx(CLITERAL(Vector2){ cx1, cy1 },
+                     CLITERAL(Vector2){ cx2, cy2 }, thickness, colour);
+        }
 
         //DrawLine(cx1, cy1, cx2, cy2, colour);
       }
@@ -148,30 +193,35 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
   }
 }
 
+void NEAT_crossover(struct NEAT_Genome *p1, struct NEAT_Genome *p2) {
+  (void)p1;
+  (void)p2;
+}
+
 int main(void) {
   //srand(time(NULL));
   srand(69420);
 
   struct NEAT_Parameters p = {
-    .inputs = 1,
-    .outputs = 1,
+    .inputs = 2,
+    .outputs = 4,
     .populationSize = 7,
 
-    .allowRecurrent = false,
-    .recurrentProbability = 0.5f,
+    .allowRecurrent = true,
+    .recurrentProbability = 0.1f,
 
     .parentMutationProbability = 0.01f,
     .childMutationProbability = 0.3f,
     .maxMutationsPerGeneration = 3,
 
-    .conToggleProbability = 0.2f,
-    .weightNudgeProbability = 0.2f,
-    .weightRandomizeProbability = 0.2f,
+    .conToggleProbability = 0.25f,
+    .weightNudgeProbability = 0.25f,
+    .weightRandomizeProbability = 0.25f,
 
-    .connectionAddProbability = 0.2f,
-    .neuronAddProbability = 0.2f,
-    .connectionDeleteProbability = 0.2f,
-    .neuronDeleteProbability = 0.2f,
+    .connectionAddProbability = 0.125f,
+    .neuronAddProbability = 0.125f,
+    .connectionDeleteProbability = 0.125f,
+    .neuronDeleteProbability = 0.125f,
 
     .elitismProportion = 0.2f,
     .sexualProportion = 0.5f,
@@ -184,12 +234,12 @@ int main(void) {
 
   struct NEAT_Context ctx = NEAT_constructPopulation(&p);
 
-  //DA_FREE(&ctx.population[0].connections);
+  DA_FREE(&ctx.population[0].connections);
 
   //ctx.population[0].connections.items[0].enabled = false;
 
-  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD,
-  //                      ctx.population[0].nextNeuronId - 1, 1, false, &ctx);
+  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_RECURRENT, 69, 69,
+                        true, true, &ctx);
 
   //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_RECURRENT,
   //                      ctx.population[0].nextNeuronId - 1, 2, false, &ctx);
@@ -203,7 +253,7 @@ int main(void) {
   //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 5,
   //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
 
-  //NEAT_mutate(&ctx.population[0], NEAT_PRUNE, &ctx);
+  //NEAT_mutate(&ctx.population[0], NEAT_COMPLEXIFY, &ctx);
   NEAT_layer(&ctx);
 
   NEAT_printNetwork(&ctx.population[0]);
