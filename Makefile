@@ -1,11 +1,11 @@
-#CC:=gcc
-CC:=x86_64-w64-mingw32-gcc
+CC:=gcc
+#CC:=x86_64-w64-mingw32-gcc
 LD:=gcc
 
-#CFLAGS:=-Wall -Wextra -g -std=gnu17 -I. $(pkg-config --cflags raylib) -ffunction-sections -fdata-sections -Wl,--gc-sections
-#LDFLAGS:=-lraylib -lm
-CFLAGS:=-Wall -Wextra -g -std=gnu17 -I. -I../raylib/build/raylib/include -ffunction-sections -fdata-sections -Wl,--gc-sections
-LDFLAGS:= -L. -lraylib -lm -lglfw3 -lopengl32 -lgdi32 -lwinmm
+CFLAGS:=-Wall -Wextra -g -std=gnu17 -I. $(pkg-config --cflags raylib) -ffunction-sections -fdata-sections -Wl,--gc-sections
+LDFLAGS:=-lraylib -lm
+#CFLAGS:=-Wall -Wextra -g -std=gnu17 -I. -I../raylib/build/raylib/include -ffunction-sections -fdata-sections -Wl,--gc-sections
+#LDFLAGS:= -L. -lraylib -lm -lglfw3 -lopengl32 -lgdi32 -lwinmm
 
 BIN:=bin
 OBJ:=obj

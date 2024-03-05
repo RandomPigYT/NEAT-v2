@@ -340,11 +340,12 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
 
         uint32_t fromId = g->neurons.items[n1].id;
         uint32_t toId = g->neurons.items[n2].id;
-        if (g->neurons.items[n2].layer > g->neurons.items[n1].layer) {
-          uint32_t temp = fromId;
-          fromId = toId;
-          toId = temp;
-        }
+
+        //if (g->neurons.items[n2].layer > g->neurons.items[n1].layer) {
+        //  uint32_t temp = fromId;
+        //  fromId = toId;
+        //  toId = temp;
+        //}
 
         NEAT_createConnection(g, NEAT_CON_KIND_RECURRENT, toId, fromId, false,
                               true, ctx);
@@ -630,7 +631,7 @@ int main(void) {
 
   struct NEAT_Parameters p = {
     .inputs = 1,
-    .outputs = 3,
+    .outputs = 1,
     .populationSize = 7,
 
     .allowRecurrent = true,
@@ -660,10 +661,7 @@ int main(void) {
 
   struct NEAT_Context ctx = NEAT_constructPopulation(&p);
 
-  DA_FREE(&ctx.population[0].connections);
-
-  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 2, 0, false,
-  //                      &ctx);
+  //DA_FREE(&ctx.population[0].connections);
 
   //ctx.population[0].connections.items[0].enabled = false;
 
@@ -682,7 +680,7 @@ int main(void) {
   //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 5,
   //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
 
-  //NEAT_mutate(&ctx.population[0], NEAT_COMPLEXIFY, &ctx);
+  //NEAT_mutate(&ctx.population[0], NEAT_PRUNE, &ctx);
   NEAT_layer(&ctx);
 
   NEAT_printNetwork(&ctx.population[0]);
