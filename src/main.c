@@ -215,8 +215,8 @@ int main(void) {
     .maxMutationsPerGeneration = 3,
 
     .conToggleProbability = 0.25f,
-    .weightNudgeProbability = 0.25f,
-    .weightRandomizeProbability = 0.25f,
+    .weightNudgeProbability = 0.50f,
+    .weightRandomizeProbability = 0.00f,
 
     .connectionAddProbability = 0.125f,
     .neuronAddProbability = 0.125f,
@@ -232,14 +232,45 @@ int main(void) {
     .improvementDeadline = 15,
   };
 
+  //struct NEAT_Parameters p = {
+  //  .inputs = 2,
+  //  .outputs = 4,
+  //  .populationSize = 7,
+
+  //  .allowRecurrent = true,
+  //  .recurrentProbability = 0.1f,
+
+  //  .parentMutationProbability = 0.01f,
+  //  .childMutationProbability = 0.3f,
+  //  .maxMutationsPerGeneration = 3,
+
+  //  .conToggleProbability = 0.0f,
+  //  .weightNudgeProbability = 0.0f,
+  //  .weightRandomizeProbability = 0.0f,
+
+  //  .connectionAddProbability = 0.0f,
+  //  .neuronAddProbability = 1.0f,
+  //  .connectionDeleteProbability = 0.0f,
+  //  .neuronDeleteProbability = 0.0f,
+
+  //  .elitismProportion = 0.2f,
+  //  .sexualProportion = 0.5f,
+  //  .interspeciesProbability = 0.1f,
+
+  //  .initialSpeciesTarget = 10,
+  //  .initialSpeciationThreshold = 1.5f,
+  //  .improvementDeadline = 15,
+  //};
+
   struct NEAT_Context ctx = NEAT_constructPopulation(&p);
 
-  DA_FREE(&ctx.population[0].connections);
+  //DA_FREE(&ctx.population[0].connections);
 
   //ctx.population[0].connections.items[0].enabled = false;
-
-  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_RECURRENT, 69, 69,
-                        true, true, &ctx);
+  //
+  //NEAT_splitConnection(&ctx.population[0], 0, &ctx);
+  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_RECURRENT, 1, 69,
+  //                        false, true, &ctx);
 
   //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_RECURRENT,
   //                      ctx.population[0].nextNeuronId - 1, 2, false, &ctx);
@@ -252,8 +283,8 @@ int main(void) {
   //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
   //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 5,
   //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
-
-  //NEAT_mutate(&ctx.population[0], NEAT_COMPLEXIFY, &ctx);
+  //
+  NEAT_mutate(&ctx.population[0], NEAT_COMPLEXIFY, &ctx);
   NEAT_layer(&ctx);
 
   NEAT_printNetwork(&ctx.population[0]);
@@ -336,7 +367,7 @@ int main(void) {
     if (!paused)
       t += GetFrameTime();
 
-    if (t >= 0.0f /* && i < 1000 */ && !paused) {
+    if (t >= 0.2f /* && i < 1000 */ && !paused) {
       //uint32_t con = rand() % ctx.population[0].connections.count;
       //NEAT_splitConnection(&ctx.population[0], con, &ctx);
       //NEAT_layer(&ctx);

@@ -12,6 +12,8 @@
 #define NEAT_MAX_CON_GEN_RANGE 1.0f
 #define NEAT_MIN_CON_GEN_RANGE -1.0f
 
+#define NEAT_NUDGE_FACTOR 0.5f
+
 #define NEAT_EPSILON 1e-6f
 
 #define NEAT_MAX_ITERS 100
@@ -242,6 +244,7 @@ struct NEAT_Parameters {
 };
 
 // Returns false if a connection was not added
+// Does not update nextNeuronId if neuron was created
 bool NEAT_createConnection(struct NEAT_Genome *genome,
                            enum NEAT_ConnectionKind kind, uint32_t to,
                            uint32_t from, bool createMissingNeurons,
@@ -637,8 +640,9 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
     uint32_t weightToNudge = rand() % g->connections.count;
 
     float amount = (((float)rand() / (float)RAND_MAX) *
-                    (NEAT_MAX_CON_GEN_RANGE - NEAT_MIN_CON_GEN_RANGE)) +
-                   NEAT_MIN_CON_GEN_RANGE;
+                    ((NEAT_MAX_CON_GEN_RANGE * NEAT_NUDGE_FACTOR) -
+                     (NEAT_MIN_CON_GEN_RANGE * NEAT_NUDGE_FACTOR))) +
+                   (NEAT_MIN_CON_GEN_RANGE * NEAT_NUDGE_FACTOR);
 
     g->connections.items[weightToNudge].weight += amount;
 
