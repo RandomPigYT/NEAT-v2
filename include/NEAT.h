@@ -245,12 +245,14 @@ struct NEAT_Parameters {
 
 // Returns false if a connection was not added
 // Does not update nextNeuronId if neuron was created
+// Does not updage history and innovation if ctx is NULL
 bool NEAT_createConnection(struct NEAT_Genome *genome,
                            enum NEAT_ConnectionKind kind, uint32_t to,
                            uint32_t from, bool createMissingNeurons,
                            bool enabled, struct NEAT_Context *ctx);
 
-struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx);
+struct NEAT_Genome NEAT_constructNetwork(bool createConnections,
+                                         struct NEAT_Context *ctx);
 
 void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
                           struct NEAT_Context *ctx);
@@ -328,29 +330,32 @@ bool NEAT_createConnection(struct NEAT_Genome *genome,
   bool isNovelConnection = true;
   uint64_t innovation = 0;
 
-  for (uint64_t i = 0; i < ctx->history.count; i++) {
-    struct NEAT_ConnectionRecord temp = ctx->history.items[i];
-    if (temp.kind == kind && temp.from == from && temp.to == to) {
-      isNovelConnection = false;
-      innovation = temp.innovation;
+  // Does not update innovation if ctx is NULL
+  if (ctx) {
+    for (uint64_t i = 0; i < ctx->history.count; i++) {
+      struct NEAT_ConnectionRecord temp = ctx->history.items[i];
+      if (temp.kind == kind && temp.from == from && temp.to == to) {
+        isNovelConnection = false;
+        innovation = temp.innovation;
+      }
     }
-  }
 
-  if (isNovelConnection) {
-    struct NEAT_ConnectionRecord temp = {
-      .from = from,
-      .to = to,
-      .kind = kind,
-      .innovation = ctx->globalInnovation++,
-    };
+    if (isNovelConnection) {
+      struct NEAT_ConnectionRecord temp = {
+        .from = from,
+        .to = to,
+        .kind = kind,
+        .innovation = ctx->globalInnovation++,
+      };
 
-    innovation = temp.innovation;
-    DA_APPEND(&ctx->history, temp);
-  } else {
-    // Check if the connection already exists in the genome
-    for (uint64_t i = 0; i < genome->connections.count; i++) {
-      if (genome->connections.items[i].innovation == innovation) {
-        return false;
+      innovation = temp.innovation;
+      DA_APPEND(&ctx->history, temp);
+    } else {
+      // Check if the connection already exists in the genome
+      for (uint64_t i = 0; i < genome->connections.count; i++) {
+        if (genome->connections.items[i].innovation == innovation) {
+          return false;
+        }
       }
     }
   }
@@ -373,7 +378,8 @@ bool NEAT_createConnection(struct NEAT_Genome *genome,
   return true;
 }
 
-struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx) {
+struct NEAT_Genome NEAT_constructNetwork(bool createConnections,
+                                         struct NEAT_Context *ctx) {
   struct NEAT_Genome genome = {
     .connections = { 0 },
     .neurons = { 0 },
@@ -410,11 +416,13 @@ struct NEAT_Genome NEAT_constructNetwork(struct NEAT_Context *ctx) {
   }
 
   // Fully connect the network
-  for (uint32_t j = 0; j < ctx->arch.inputs; j++) {
-    for (uint32_t k = ctx->arch.inputs;
-         k < ctx->arch.inputs + ctx->arch.outputs; k++) {
-      NEAT_createConnection(&genome, NEAT_CON_KIND_FORWARD, k, j, false, true,
-                            ctx);
+  if (createConnections) {
+    for (uint32_t j = 0; j < ctx->arch.inputs; j++) {
+      for (uint32_t k = ctx->arch.inputs;
+           k < ctx->arch.inputs + ctx->arch.outputs; k++) {
+        NEAT_createConnection(&genome, NEAT_CON_KIND_FORWARD, k, j, false, true,
+                              ctx);
+      }
     }
   }
 
@@ -488,7 +496,7 @@ NEAT_constructPopulation(const struct NEAT_Parameters *parameters) {
   assert(ctx.population != NULL && "Failed to allocate memory for population");
 
   for (uint32_t i = 0; i < ctx.populationSize; i++) {
-    ctx.population[i] = NEAT_constructNetwork(&ctx);
+    ctx.population[i] = NEAT_constructNetwork(true, &ctx);
   }
 
   return ctx;
@@ -634,7 +642,7 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
   float random = (float)rand() / (float)RAND_MAX;
 
   runningSum += nudgeProb;
-  if (random < runningSum) {
+  if (random <= runningSum) {
     assert(g->connections.count > 0);
 
     uint32_t weightToNudge = rand() % g->connections.count;
@@ -650,7 +658,7 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
   }
 
   runningSum += randProb;
-  if (random < runningSum) {
+  if (random <= runningSum) {
     assert(g->connections.count > 0);
 
     uint32_t weightToRandomize = rand() % g->connections.count;
@@ -665,7 +673,7 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
   }
 
   runningSum += conToggleProb;
-  if (random < runningSum) {
+  if (random <= runningSum) {
     assert(g->connections.count > 0);
 
     uint32_t weightToToggle = rand() % g->connections.count;
@@ -677,7 +685,7 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
   }
 
   runningSum += conStructureModProb;
-  if (random < runningSum) {
+  if (random <= runningSum) {
     if (phase == NEAT_COMPLEXIFY) {
       bool isRecurrent = false;
       if (ctx->allowRecurrent) {
@@ -740,7 +748,7 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
   }
 
   runningSum += neuronStructureModProb;
-  if (random < runningSum) {
+  if (random <= runningSum) {
     if (phase == NEAT_COMPLEXIFY) {
       assert(g->connections.count != 0);
 

@@ -193,9 +193,136 @@ void drawNetwork(struct NEAT_Genome *g, uint32_t x, uint32_t y, uint32_t w,
   }
 }
 
-void NEAT_crossover(struct NEAT_Genome *p1, struct NEAT_Genome *p2) {
-  (void)p1;
-  (void)p2;
+struct NEAT_Genome NEAT_crossover(const struct NEAT_Genome *p1,
+                                  const struct NEAT_Genome *p2,
+                                  struct NEAT_Context *ctx) {
+  // p1 always has fitness greater than or equal to p2
+  if (p1->fitness < p2->fitness) {
+    const struct NEAT_Genome *temp = p1;
+    p1 = p2;
+    p2 = temp;
+  }
+
+  struct NEAT_Genome child = NEAT_constructNetwork(false, ctx);
+
+  DA_CREATE(uint32_t) p1DisjointGenes = { 0 };
+  DA_CREATE(uint32_t) p2DisjointGenes = { 0 };
+
+  // Matching genes
+  for (uint32_t i = 0; i < p1->connections.count; i++) {
+    bool match = false;
+    uint32_t matchIndex = 0;
+    for (uint32_t j = 0; j < p2->connections.count; j++) {
+      if (p2->connections.items[j].innovation ==
+          p1->connections.items[i].innovation) {
+        match = true;
+        matchIndex = j;
+
+        break;
+      }
+    }
+
+    if (!match) {
+      DA_APPEND(&p1DisjointGenes, i);
+      continue;
+    }
+
+    uint32_t currentIndex = child.connections.count;
+
+    NEAT_createConnection(&child, p1->connections.items[i].kind,
+                          p1->connections.items[i].to,
+                          p1->connections.items[i].from, true, true, NULL);
+
+    child.connections.items[currentIndex].innovation =
+      p1->connections.items[i].innovation;
+
+    float random = (float)rand() / (float)RAND_MAX;
+    if (random <= 0.5f) {
+      child.connections.items[currentIndex].weight =
+        p1->connections.items[i].weight;
+      child.connections.items[currentIndex].enabled =
+        p1->connections.items[i].enabled;
+    } else {
+      child.connections.items[currentIndex].weight =
+        p2->connections.items[matchIndex].weight;
+      child.connections.items[currentIndex].enabled =
+        p2->connections.items[matchIndex].enabled;
+    }
+  }
+
+  // Non-matching genes
+  bool fitnessEqual = p1->fitness == p2->fitness ? true : false;
+  if (fitnessEqual) {
+    for (uint32_t i = 0; i < p2->connections.count; i++) {
+      bool match = false;
+      for (uint32_t j = 0; j < p1->connections.count; j++) {
+        if (p1->connections.items[j].innovation ==
+            p2->connections.items[i].innovation) {
+          match = true;
+
+          break;
+        }
+      }
+
+      if (!match) {
+        DA_APPEND(&p2DisjointGenes, i);
+      }
+    }
+  }
+
+  for (uint32_t i = 0; i < p1DisjointGenes.count; i++) {
+    bool shouldInheritGene = true;
+    if (fitnessEqual) {
+      float random = (float)rand() / (float)RAND_MAX;
+      if (random > 0.5f) {
+        shouldInheritGene = false;
+      }
+    }
+
+    if (shouldInheritGene) {
+      uint32_t p1ConIndex = p1DisjointGenes.items[i];
+      uint32_t childConIndex = child.connections.count;
+      NEAT_createConnection(&child, p1->connections.items[p1ConIndex].kind,
+                            p1->connections.items[p1ConIndex].to,
+                            p1->connections.items[p1ConIndex].from, true,
+                            p1->connections.items[p1ConIndex].enabled, NULL);
+
+      child.connections.items[childConIndex].innovation =
+        p1->connections.items[p1ConIndex].innovation;
+      child.connections.items[childConIndex].weight =
+        p1->connections.items[p1ConIndex].weight;
+    }
+  }
+
+  if (fitnessEqual) {
+    for (uint32_t i = 0; i < p2DisjointGenes.count; i++) {
+      bool shouldInheritGene = true;
+
+      float random = (float)rand() / (float)RAND_MAX;
+      if (random > 0.5f) {
+        shouldInheritGene = false;
+      }
+
+      if (shouldInheritGene) {
+        uint32_t p2ConIndex = p2DisjointGenes.items[i];
+        uint32_t childConIndex = child.connections.count;
+        NEAT_createConnection(&child, p2->connections.items[p2ConIndex].kind,
+                              p2->connections.items[p2ConIndex].to,
+                              p2->connections.items[p2ConIndex].from, true,
+                              p2->connections.items[p2ConIndex].enabled, NULL);
+
+        child.connections.items[childConIndex].innovation =
+          p2->connections.items[p2ConIndex].innovation;
+        child.connections.items[childConIndex].weight =
+          p2->connections.items[p2ConIndex].weight;
+      }
+    }
+  }
+
+  DA_FREE(&p1DisjointGenes);
+  DA_FREE(&p2DisjointGenes);
+
+  return child;
 }
 
 int main(void) {
@@ -204,7 +331,7 @@ int main(void) {
 
   struct NEAT_Parameters p = {
     .inputs = 2,
-    .outputs = 4,
+    .outputs = 1,
     .populationSize = 7,
 
     .allowRecurrent = true,
@@ -215,8 +342,8 @@ int main(void) {
     .maxMutationsPerGeneration = 3,
 
     .conToggleProbability = 0.25f,
-    .weightNudgeProbability = 0.50f,
-    .weightRandomizeProbability = 0.00f,
+    .weightNudgeProbability = 0.25f,
+    .weightRandomizeProbability = 0.25f,
 
     .connectionAddProbability = 0.125f,
     .neuronAddProbability = 0.125f,
@@ -264,35 +391,59 @@ int main(void) {
 
   struct NEAT_Context ctx = NEAT_constructPopulation(&p);
 
-  //DA_FREE(&ctx.population[0].connections);
+  //NEAT_mutate(&ctx.population[0], NEAT_COMPLEXIFY, &ctx);
 
-  //ctx.population[0].connections.items[0].enabled = false;
-  //
-  //NEAT_splitConnection(&ctx.population[0], 0, &ctx);
-  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_RECURRENT, 1, 69,
-  //                        false, true, &ctx);
+  DA_FREE(&ctx.population[0].connections);
+  DA_FREE(&ctx.population[1].connections);
 
-  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_RECURRENT,
-  //                      ctx.population[0].nextNeuronId - 1, 2, false, &ctx);
+  DA_FREE(&ctx.history);
+  ctx.globalInnovation = 0;
 
-  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 2,
-  //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
-  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 3,
-  //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
-  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 4,
-  //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
-  //NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 5,
-  //                      ctx.population[0].nextNeuronId - 1, false, &ctx);
-  //
-  NEAT_mutate(&ctx.population[0], NEAT_COMPLEXIFY, &ctx);
+  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 3, 0, true,
+                        true, &ctx);
+  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 3, 1, true,
+                        false, &ctx);
+  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 3, 2, true,
+                        true, &ctx);
+  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 4, 1, true,
+                        true, &ctx);
+  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 3, 4, true,
+                        true, &ctx);
+  NEAT_createConnection(&ctx.population[0], NEAT_CON_KIND_FORWARD, 4, 0, true,
+                        true, &ctx);
+
+  ctx.population[0]
+    .connections.items[ctx.population[0].connections.count - 1]
+    .innovation = 7;
+
+  ctx.globalInnovation = 8;
+
+  NEAT_createConnection(&ctx.population[1], NEAT_CON_KIND_FORWARD, 3, 0, true,
+                        true, &ctx);
+  NEAT_createConnection(&ctx.population[1], NEAT_CON_KIND_FORWARD, 3, 1, true,
+                        false, &ctx);
+  NEAT_createConnection(&ctx.population[1], NEAT_CON_KIND_FORWARD, 3, 2, true,
+                        true, &ctx);
+  NEAT_createConnection(&ctx.population[1], NEAT_CON_KIND_FORWARD, 4, 1, true,
+                        true, &ctx);
+  NEAT_createConnection(&ctx.population[1], NEAT_CON_KIND_FORWARD, 3, 4, true,
+                        false, &ctx);
+  NEAT_createConnection(&ctx.population[1], NEAT_CON_KIND_FORWARD, 5, 4, true,
+                        true, &ctx);
+  NEAT_createConnection(&ctx.population[1], NEAT_CON_KIND_FORWARD, 3, 5, true,
+                        true, &ctx);
+  NEAT_createConnection(&ctx.population[1], NEAT_CON_KIND_FORWARD, 4, 2, true,
+                        true, &ctx);
+  NEAT_createConnection(&ctx.population[1], NEAT_CON_KIND_FORWARD, 5, 0, true,
+                        true, &ctx);
+
+  ctx.population[0].fitness = 1.0f;
+  ctx.population[1].fitness = ctx.population[0].fitness - 1;
+  ctx.population[0] =
+    NEAT_crossover(&ctx.population[0], &ctx.population[1], &ctx);
+
   NEAT_layer(&ctx);
-
   NEAT_printNetwork(&ctx.population[0]);
-
-  //for (uint32_t i = 0; i < ctx.populationSize; i++) {
-  //  NEAT_printNetwork(&ctx.population[i]);
-  //  printf("Next neuron ID: %d\n", ctx.population[i].nextNeuronId);
-  //}
 
   uint32_t factor = 120;
   uint32_t width = 16 * factor;
@@ -367,7 +518,7 @@ int main(void) {
     if (!paused)
       t += GetFrameTime();
 
-    if (t >= 0.2f /* && i < 1000 */ && !paused) {
+    if (t >= 0.0f /* && i < 1000 */ && !paused) {
       //uint32_t con = rand() % ctx.population[0].connections.count;
       //NEAT_splitConnection(&ctx.population[0], con, &ctx);
       //NEAT_layer(&ctx);
@@ -394,6 +545,8 @@ int main(void) {
   }
 
   CloseWindow();
+
+  //NEAT_printNetwork(&ctx.population[0]);
 
   NEAT_cleanup(&ctx);
 
