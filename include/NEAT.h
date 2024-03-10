@@ -269,6 +269,10 @@ void NEAT_numNeuronConnections(const struct NEAT_Genome *g, uint32_t neuron,
 void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
                  struct NEAT_Context *ctx);
 
+struct NEAT_Genome NEAT_crossover(const struct NEAT_Genome *p1,
+                                  const struct NEAT_Genome *p2,
+                                  struct NEAT_Context *ctx);
+
 int64_t NEAT_findNeuron(const struct NEAT_Genome *g, uint32_t id);
 
 uint32_t NEAT_layerNeuron(const struct NEAT_Genome *g, uint32_t neuronIndex,
@@ -982,6 +986,147 @@ void NEAT_mutate(struct NEAT_Genome *g, enum NEAT_Phase phase,
 Exit:
   DA_FREE(&removableNeurons);
   return;
+}
+
+struct NEAT_Genome NEAT_crossover(const struct NEAT_Genome *p1,
+                                  const struct NEAT_Genome *p2,
+                                  struct NEAT_Context *ctx) {
+  // p1 always has fitness greater than or equal to p2
+  if (p1->fitness < p2->fitness) {
+    const struct NEAT_Genome *temp = p1;
+    p1 = p2;
+    p2 = temp;
+  }
+
+  struct NEAT_Genome child = NEAT_constructNetwork(false, ctx);
+
+  DA_CREATE(uint32_t) p1DisjointGenes = { 0 };
+  DA_CREATE(uint32_t) p2DisjointGenes = { 0 };
+
+  // Matching genes
+  for (uint32_t i = 0; i < p1->connections.count; i++) {
+    bool match = false;
+    uint32_t matchIndex = 0;
+    for (uint32_t j = 0; j < p2->connections.count; j++) {
+      if (p2->connections.items[j].innovation ==
+          p1->connections.items[i].innovation) {
+        match = true;
+        matchIndex = j;
+
+        break;
+      }
+    }
+
+    if (!match) {
+      DA_APPEND(&p1DisjointGenes, i);
+      continue;
+    }
+
+    uint32_t currentIndex = child.connections.count;
+
+    NEAT_createConnection(&child, p1->connections.items[i].kind,
+                          p1->connections.items[i].to,
+                          p1->connections.items[i].from, true, true, NULL);
+
+    child.connections.items[currentIndex].innovation =
+      p1->connections.items[i].innovation;
+
+    float random = (float)rand() / (float)RAND_MAX;
+    if (random <= 0.5f) {
+      child.connections.items[currentIndex].weight =
+        p1->connections.items[i].weight;
+      child.connections.items[currentIndex].enabled =
+        p1->connections.items[i].enabled;
+    } else {
+      child.connections.items[currentIndex].weight =
+        p2->connections.items[matchIndex].weight;
+      child.connections.items[currentIndex].enabled =
+        p2->connections.items[matchIndex].enabled;
+    }
+  }
+
+  // Non-matching genes
+  bool fitnessEqual = p1->fitness == p2->fitness ? true : false;
+  if (fitnessEqual) {
+    for (uint32_t i = 0; i < p2->connections.count; i++) {
+      bool match = false;
+      for (uint32_t j = 0; j < p1->connections.count; j++) {
+        if (p1->connections.items[j].innovation ==
+            p2->connections.items[i].innovation) {
+          match = true;
+
+          break;
+        }
+      }
+
+      if (!match) {
+        DA_APPEND(&p2DisjointGenes, i);
+      }
+    }
+  }
+
+  for (uint32_t i = 0; i < p1DisjointGenes.count; i++) {
+    bool shouldInheritGene = true;
+    if (fitnessEqual) {
+      float random = (float)rand() / (float)RAND_MAX;
+      if (random > 0.5f) {
+        shouldInheritGene = false;
+      }
+    }
+
+    if (shouldInheritGene) {
+      uint32_t p1ConIndex = p1DisjointGenes.items[i];
+      uint32_t childConIndex = child.connections.count;
+      NEAT_createConnection(&child, p1->connections.items[p1ConIndex].kind,
+                            p1->connections.items[p1ConIndex].to,
+                            p1->connections.items[p1ConIndex].from, true,
+                            p1->connections.items[p1ConIndex].enabled, NULL);
+
+      child.connections.items[childConIndex].innovation =
+        p1->connections.items[p1ConIndex].innovation;
+      child.connections.items[childConIndex].weight =
+        p1->connections.items[p1ConIndex].weight;
+    }
+  }
+
+  if (fitnessEqual) {
+    for (uint32_t i = 0; i < p2DisjointGenes.count; i++) {
+      bool shouldInheritGene = true;
+
+      float random = (float)rand() / (float)RAND_MAX;
+      if (random > 0.5f) {
+        shouldInheritGene = false;
+      }
+
+      if (shouldInheritGene) {
+        uint32_t p2ConIndex = p2DisjointGenes.items[i];
+        uint32_t childConIndex = child.connections.count;
+        NEAT_createConnection(&child, p2->connections.items[p2ConIndex].kind,
+                              p2->connections.items[p2ConIndex].to,
+                              p2->connections.items[p2ConIndex].from, true,
+                              p2->connections.items[p2ConIndex].enabled, NULL);
+
+        child.connections.items[childConIndex].innovation =
+          p2->connections.items[p2ConIndex].innovation;
+        child.connections.items[childConIndex].weight =
+          p2->connections.items[p2ConIndex].weight;
+      }
+    }
+  }
+
+  uint32_t maxNeuronID = 0;
+  for (uint32_t i = 0; i < child.neurons.count; i++) {
+    maxNeuronID = child.neurons.items[i].id > maxNeuronID
+                    ? child.neurons.items[i].id
+                    : maxNeuronID;
+  }
+
+  child.nextNeuronId = maxNeuronID + 1;
+
+  DA_FREE(&p1DisjointGenes);
+  DA_FREE(&p2DisjointGenes);
+
+  return child;
 }
 
 void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
