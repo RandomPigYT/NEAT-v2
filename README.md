@@ -24,6 +24,6 @@ All the code necessary for visualisation is present in the "NEAT-Visualise.h" he
 
 ## Disclaimer
 
-I've written this library for purely educational purposes, and so, it is, by no means, production grade. 
+I've written this library for purely educational purposes, and so, it is by no means production grade. 
 Use at your own risk.
 
