@@ -122,6 +122,13 @@ struct NEAT_Neuron {
   float activation;
 
   uint32_t layer;
+
+  // Redundancy to speed up feed-forward
+  DA_CREATE(uint32_t) recurrentInConnections;
+  DA_CREATE(uint32_t) recurrentInNeurons;
+
+  DA_CREATE(uint32_t) forwardOutConnections;
+  DA_CREATE(uint32_t) forwardOutNeurons;
 };
 
 struct NEAT_Genome {
@@ -1127,28 +1134,6 @@ struct NEAT_Genome NEAT_crossover(const struct NEAT_Genome *p1,
   DA_FREE(&p2DisjointGenes);
 
   return child;
-}
-
-void NEAT_splitConnection(struct NEAT_Genome *g, uint32_t connection,
-                          struct NEAT_Context *ctx) {
-  assert(connection < g->connections.count && "Invalid connection index");
-  g->connections.items[connection].enabled = false;
-
-  //uint32_t maxNeuronId = 0;
-  //for (uint32_t i = 0; i < g->neurons.count; i++) {
-  //  maxNeuronId = g->neurons.items[i].id > maxNeuronId ? g->neurons.items[i].id
-  //                                                     : maxNeuronId;
-  //}
-
-  enum NEAT_ConnectionKind kind = g->connections.items[connection].kind;
-
-  NEAT_createConnection(g, kind, g->nextNeuronId,
-                        g->connections.items[connection].from, true, true, ctx);
-
-  NEAT_createConnection(g, kind, g->connections.items[connection].to,
-                        g->nextNeuronId, true, true, ctx);
-
-  g->nextNeuronId++;
 }
 
 void NEAT_printNetwork(const struct NEAT_Genome *g) {
